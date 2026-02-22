@@ -252,7 +252,7 @@ function App() {
           <h1>Single-image to Gaussian splats, fully client-side</h1>
           <p className="hero-copy">
             Upload an image, run an exported SHARP ONNX predictor in the browser, preview the generated splat,
-            and download a `.ply` file. No backend inference path is used.
+            and download a `.ply` file. Everything runs in the browser.
           </p>
         </div>
         <div className="license-callout">
@@ -289,7 +289,7 @@ function App() {
               placeholder="/models/sharp_web_predictor.onnx"
               disabled={Boolean(modelFile)}
             />
-            <small>Used when no local ONNX file is selected.</small>
+            <small>Used when no uploaded ONNX file is selected.</small>
           </label>
 
           <label className="field">
@@ -301,7 +301,7 @@ function App() {
             />
             <small>
               {modelFile
-                ? `Using local model: ${modelFile.name}`
+                ? `Using uploaded model: ${modelFile.name}`
                 : 'Optional. Note: SHARP exports usually include a companion `.onnx.data` file, so URL mode is the reliable option.'}
             </small>
           </label>

@@ -4,7 +4,7 @@ A browser-based Gaussian splat generator built on top of [Apple SHARP](https://g
 
 This project lets you:
 - upload one image
-- generate Gaussian splats in the browser (no backend inference server)
+- generate Gaussian splats in the browser
 - preview the result
 - download a `.ply` file
 
@@ -46,7 +46,7 @@ This also copies ONNX Runtime Web WASM assets into `public/ort/` automatically.
 bun dev
 ```
 
-Open the local URL shown by Vite (usually `http://localhost:5173`).
+Open the URL shown by Vite (usually `http://localhost:5173`).
 
 ### 3. Use the app
 
@@ -68,12 +68,12 @@ Why this matters:
 - The `.onnx` file is only the graph and metadata.
 - The `.onnx.data` file contains most of the model weights.
 
-For that reason, **Model URL mode** is the reliable option in the UI.
+For that reason, **URL mode** is the reliable option in the UI.
 Uploading only the `.onnx` file directly in the browser usually will not work because the `.onnx.data` sidecar is separate.
 
 ## Export the SHARP model to ONNX (beginner-friendly steps)
 
-This repo does not require a backend, but you do need an exported SHARP ONNX model.
+Everything runs in the browser, but you still need an exported SHARP ONNX model.
 
 ### 1. Clone Apple's SHARP repo (reference code)
 
@@ -109,7 +109,7 @@ public/models/sharp_web_predictor.onnx.data
 - `--device cuda` to export on GPU (if your environment supports it)
 - `--opset 20` to change ONNX opset (default is `20`)
 
-## Local static build (optional)
+## Static build (optional)
 
 If you want a static build instead of running `bun dev`:
 
