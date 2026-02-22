@@ -1,6 +1,6 @@
 # ml-sharp-web
 
-Browser-first (client-side) web UI for generating and previewing Gaussian splats from a single image using an exported ONNX wrapper around Apple SHARP.
+Browser-first (client-side) web UI for generating and previewing Gaussian splats from a single image using an exported ONNX predictor from Apple SHARP.
 
 ## Status
 
@@ -24,23 +24,21 @@ If you use Apple's released SHARP checkpoint/weights, your usage must comply wit
 
 ## Architecture
 
-The web app expects an ONNX wrapper model with these inputs and outputs:
+The web app expects a raw SHARP predictor ONNX with these inputs and outputs:
 
 Inputs:
 - `image` (`float32[1,3,1536,1536]`) RGB in `[0,1]`
 - `disparity_factor` (`float32[1]`) = `f_px / image_width`
-- `f_px` (`float32[1]`)
-- `orig_width` (`float32[1]`)
-- `orig_height` (`float32[1]`)
-
 Outputs:
-- `mean_vectors`
-- `singular_values`
-- `quaternions`
+- `mean_vectors_ndc`
+- `singular_values_ndc`
+- `quaternions_ndc`
 - `colors`
 - `opacities`
 
-The UI then filters/caps Gaussians for browser performance, serializes them to binary `.ply`, previews them with a browser splat viewer, and exposes a download link.
+The UI then filters/caps Gaussians for browser performance, performs the SHARP NDC->metric gaussian conversion in-browser, serializes to binary `.ply`, previews with a browser splat viewer, and exposes a download link.
+
+The exporter may produce a companion `sharp_web_predictor.onnx.data` file (external tensor data). When present, keep it in the same `/models/` directory as the `.onnx`.
 
 ## Local development
 
@@ -72,13 +70,21 @@ git clone https://github.com/apple/ml-sharp /tmp/ml-sharp-upstream
 
 Use the upstream SHARP setup instructions first, then make sure PyTorch/ONNX export dependencies are installed. The exact package set can vary by platform.
 
-### 3. Export the browser wrapper ONNX
+### 3. Export the browser predictor ONNX
 
 ```bash
 python3 scripts/export_sharp_onnx.py \
   --sharp-repo /tmp/ml-sharp-upstream \
-  --output public/models/sharp_web_wrapper.onnx
+  --output public/models/sharp_web_predictor.onnx
 ```
+
+If the exported model exceeds the ONNX single-file limit, the script will also write:
+
+```text
+public/models/sharp_web_predictor.onnx.data
+```
+
+Both files must be served together.
 
 Optional:
 - `--checkpoint /path/to/sharp_2572gikvuh.pt` to avoid auto-download
@@ -88,7 +94,7 @@ Optional:
 ## Runtime caveats
 
 - SHARP is a large model. Browser memory usage is substantial.
-- ONNX Runtime Web operator support can vary by browser and backend (WebGPU vs WASM).
+- ONNX Runtime Web operator support can vary by browser and backend (WebGPU vs WASM), but this project avoids ONNX `SVD` in the browser path by doing gaussian unprojection/decomposition in the worker.
 - The app defaults to filtering/capping splats (`opacityThreshold`, `maxGaussians`) to keep preview/export practical in-browser.
 - Focal length estimation from EXIF is approximate when the image lacks 35mm-equivalent EXIF data. The UI exposes a manual focal length override because SHARP quality depends on it.
 

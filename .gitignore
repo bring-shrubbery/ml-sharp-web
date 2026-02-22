@@ -14,6 +14,7 @@ dist-ssr
 
 # Large local model artifacts
 public/models/*.onnx
+public/models/*.onnx.data
 *.pt
 
 # Editor directories and files

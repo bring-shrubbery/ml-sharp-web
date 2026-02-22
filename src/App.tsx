@@ -184,7 +184,7 @@ function App() {
     }
 
     if (!effectiveModelUrl) {
-      setErrorText('Provide an ONNX model URL or upload an ONNX wrapper file.')
+      setErrorText('Provide an ONNX model URL or upload an ONNX predictor file.')
       return
     }
 
@@ -251,7 +251,7 @@ function App() {
           <p className="eyebrow">SHARP in the Browser (experimental)</p>
           <h1>Single-image to Gaussian splats, fully client-side</h1>
           <p className="hero-copy">
-            Upload an image, run an exported SHARP ONNX wrapper in the browser, preview the generated splat,
+            Upload an image, run an exported SHARP ONNX predictor in the browser, preview the generated splat,
             and download a `.ply` file. No backend inference path is used.
           </p>
         </div>
@@ -281,12 +281,12 @@ function App() {
           </label>
 
           <label className="field">
-            <span>Model URL (ONNX wrapper)</span>
+            <span>Model URL (ONNX predictor)</span>
             <input
               type="url"
               value={modelUrlInput}
               onChange={(event) => setModelUrlInput(event.currentTarget.value)}
-              placeholder="/models/sharp_web_wrapper.onnx"
+              placeholder="/models/sharp_web_predictor.onnx"
               disabled={Boolean(modelFile)}
             />
             <small>Used when no local ONNX file is selected.</small>
@@ -299,7 +299,11 @@ function App() {
               accept=".onnx,application/octet-stream"
               onChange={(event) => setModelFile(event.currentTarget.files?.[0] ?? null)}
             />
-            <small>{modelFile ? `Using local model: ${modelFile.name}` : 'Optional (recommended while testing exports).'}</small>
+            <small>
+              {modelFile
+                ? `Using local model: ${modelFile.name}`
+                : 'Optional. Note: SHARP exports usually include a companion `.onnx.data` file, so URL mode is the reliable option.'}
+            </small>
           </label>
 
           <div className="field-grid two-col">
@@ -412,9 +416,10 @@ function App() {
 
       <footer className="footer-note">
         <p>
-          This app expects an exported ONNX wrapper model with outputs named `mean_vectors`, `singular_values`,
-          `quaternions`, `colors`, and `opacities`. Use `scripts/export_sharp_onnx.py` to generate it from the
-          upstream SHARP checkpoint.
+          This app expects an exported SHARP predictor ONNX with outputs `mean_vectors_ndc`,
+          `singular_values_ndc`, `quaternions_ndc`, `colors`, and `opacities`. Use
+          `scripts/export_sharp_onnx.py` to generate it from the upstream SHARP checkpoint. If a
+          `.onnx.data` sidecar is produced, keep it next to the `.onnx` file under `/models/`.
         </p>
       </footer>
     </div>
