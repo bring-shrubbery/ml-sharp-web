@@ -51,9 +51,8 @@ Open the URL shown by Vite (usually `http://localhost:5173`).
 ### 3. Use the app
 
 1. Upload an image.
-2. Leave the default model URL as `/models/sharp_web_predictor.onnx` (recommended).
-3. Click `Generate Splat`.
-4. Preview the result and download the `.ply` file.
+2. Click `Generate Splat`.
+3. Preview the result and download the `.ply` file.
 
 ## Important model file note (`.onnx` + `.onnx.data`)
 
@@ -68,7 +67,7 @@ Why this matters:
 - The `.onnx` file is only the graph and metadata.
 - The `.onnx.data` file contains most of the model weights.
 
-For that reason, **URL mode** is the reliable option in the UI.
+For that reason, the app uses the hosted model by default.
 Uploading only the `.onnx` file directly in the browser usually will not work because the `.onnx.data` sidecar is separate.
 
 ## Export the SHARP model to ONNX (beginner-friendly steps)
@@ -150,7 +149,7 @@ This means the ONNX sidecar file is missing or not served correctly.
 Check:
 - `public/models/sharp_web_predictor.onnx`
 - `public/models/sharp_web_predictor.onnx.data`
-- Use the default **Model URL** (`/models/sharp_web_predictor.onnx`) in the UI
+- The app can reach the hosted model files in your deployment/browser environment
 
 ### The app runs, but generation is very slow or crashes
 

@@ -55,7 +55,6 @@ function App() {
   const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null)
   const [manualFocalPx, setManualFocalPx] = useState<number | null>(null)
 
-  const [modelUrlInput, setModelUrlInput] = useState(DEFAULT_WEB_MODEL_URL)
   const [modelFile, setModelFile] = useState<File | null>(null)
   const [modelFileUrl, setModelFileUrl] = useState<string | null>(null)
 
@@ -114,7 +113,7 @@ function App() {
     }
   }, [selectedImage, result])
 
-  const effectiveModelUrl = modelFileUrl ?? modelUrlInput.trim()
+  const effectiveModelUrl = modelFileUrl ?? DEFAULT_WEB_MODEL_URL
   const focalPx = manualFocalPx ?? selectedImage?.focalEstimate.focalPx ?? 0
 
   const canGenerate = Boolean(selectedImage && effectiveModelUrl && focalPx > 0 && !isBusy)
@@ -184,7 +183,7 @@ function App() {
     }
 
     if (!effectiveModelUrl) {
-      setErrorText('Provide an ONNX model URL or upload an ONNX predictor file.')
+      setErrorText('No in-browser model source is available. Upload an ONNX predictor file or configure the hosted model URL.')
       return
     }
 
@@ -281,19 +280,7 @@ function App() {
           </label>
 
           <label className="field">
-            <span>Model URL (ONNX predictor)</span>
-            <input
-              type="url"
-              value={modelUrlInput}
-              onChange={(event) => setModelUrlInput(event.currentTarget.value)}
-              placeholder="/models/sharp_web_predictor.onnx"
-              disabled={Boolean(modelFile)}
-            />
-            <small>Used when no uploaded ONNX file is selected.</small>
-          </label>
-
-          <label className="field">
-            <span>OR upload ONNX file</span>
+            <span>Optional: upload ONNX file</span>
             <input
               type="file"
               accept=".onnx,application/octet-stream"
@@ -302,7 +289,7 @@ function App() {
             <small>
               {modelFile
                 ? `Using uploaded model: ${modelFile.name}`
-                : 'Optional. Note: SHARP exports usually include a companion `.onnx.data` file, so URL mode is the reliable option.'}
+                : 'Optional override for testing. The app uses the hosted model by default. Note: SHARP exports usually include a companion `.onnx.data` file, so uploaded `.onnx` files alone often will not work.'}
             </small>
           </label>
 
