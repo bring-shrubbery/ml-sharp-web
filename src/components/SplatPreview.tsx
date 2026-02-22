@@ -42,6 +42,7 @@ export function SplatPreview({ plyUrl, generationKey }: SplatPreviewProps) {
       try {
         localViewer.start()
         await localViewer.addSplatScene(plyUrl, {
+          format: module.SceneFormat.Ply,
           showLoadingUI: false,
           splatAlphaRemovalThreshold: 1,
         })
