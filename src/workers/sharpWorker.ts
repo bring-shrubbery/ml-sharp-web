@@ -64,15 +64,37 @@ function getSession(modelUrl: string): Promise<ort.InferenceSession> {
 }
 
 async function createSession(modelUrl: string): Promise<ort.InferenceSession> {
+  const baseSessionOptions: ort.InferenceSession.SessionOptions = {
+    graphOptimizationLevel: 'all',
+  }
+
+  try {
+    const resolved = new URL(modelUrl, self.location.href)
+    if (resolved.pathname.endsWith('.onnx')) {
+      const sidecarUrl = new URL(resolved.href)
+      sidecarUrl.pathname = `${resolved.pathname}.data`
+      const sidecarPath = `${resolved.pathname.split('/').pop() ?? 'model.onnx'}.data`
+
+      baseSessionOptions.externalData = [
+        {
+          path: sidecarPath,
+          data: sidecarUrl.href,
+        },
+      ]
+    }
+  } catch {
+    // Ignore URL parsing failures (e.g. unusual local/blob cases). ORT will still attempt to load the model.
+  }
+
   try {
     return await ort.InferenceSession.create(modelUrl, {
+      ...baseSessionOptions,
       executionProviders: ['webgpu', 'wasm'],
-      graphOptimizationLevel: 'all',
     })
   } catch (webGpuError) {
     return ort.InferenceSession.create(modelUrl, {
+      ...baseSessionOptions,
       executionProviders: ['wasm'],
-      graphOptimizationLevel: 'all',
     }).catch((wasmError) => {
       throw new Error(
         `Could not create ONNX Runtime session with WebGPU or WASM. WebGPU error: ${String(webGpuError)}. WASM error: ${String(wasmError)}`,
