@@ -1,46 +1,36 @@
 # ml-sharp-web
 
-Browser-first (client-side) web UI for generating and previewing Gaussian splats from a single image using an exported ONNX predictor from Apple SHARP.
+A browser-based Gaussian splat generator built on top of [Apple SHARP](https://github.com/apple/ml-sharp).
 
-## Status
+This project lets you:
+- upload one image
+- generate Gaussian splats in the browser (no backend inference server)
+- preview the result
+- download a `.ply` file
 
-Experimental.
+## Links
 
-This project implements:
-- single-page web UI (React + TypeScript + Bun/Vite)
-- image upload
-- in-browser ONNX inference worker (no backend inference server)
-- Gaussian splat preview in the page
-- `.ply` download
+- Project repo: [bring-shrubbery/ml-sharp-web](https://github.com/bring-shrubbery/ml-sharp-web)
+- Upstream SHARP repo (Apple): [apple/ml-sharp](https://github.com/apple/ml-sharp)
+- SHARP project page: [apple.github.io/ml-sharp](https://apple.github.io/ml-sharp/)
+- SHARP paper: [arXiv:2512.10685](https://arxiv.org/abs/2512.10685)
 
-## Important license note
+## Before you start (important license note)
 
-Apple's `ml-sharp` repository has separate licenses for code and model weights.
+Apple's SHARP repository has separate licenses for code and model weights.
 
-- Code (`LICENSE`): allows modification/redistribution with conditions
-- Model weights (`LICENSE_MODEL`): research-purpose restrictions apply
+- SHARP code license: [LICENSE](https://github.com/apple/ml-sharp/blob/main/LICENSE)
+- SHARP model license: [LICENSE_MODEL](https://github.com/apple/ml-sharp/blob/main/LICENSE_MODEL)
 
-If you use Apple's released SHARP checkpoint/weights, your usage must comply with `LICENSE_MODEL`.
+If you use Apple's released SHARP checkpoint/weights, you must follow `LICENSE_MODEL` (research-use restrictions apply).
 
-## Architecture
+## What you need
 
-The web app expects a raw SHARP predictor ONNX with these inputs and outputs:
+- [Bun](https://bun.sh/) installed
+- A modern desktop browser (Chrome or Edge recommended)
+- Enough disk space and RAM for the SHARP model (the exported ONNX sidecar is large, ~2.4 GB)
 
-Inputs:
-- `image` (`float32[1,3,1536,1536]`) RGB in `[0,1]`
-- `disparity_factor` (`float32[1]`) = `f_px / image_width`
-Outputs:
-- `mean_vectors_ndc`
-- `singular_values_ndc`
-- `quaternions_ndc`
-- `colors`
-- `opacities`
-
-The UI then filters/caps Gaussians for browser performance, performs the SHARP NDC->metric gaussian conversion in-browser, serializes to binary `.ply`, previews with a browser splat viewer, and exposes a download link.
-
-The exporter may produce a companion `sharp_web_predictor.onnx.data` file (external tensor data). When present, keep it in the same `/models/` directory as the `.onnx`.
-
-## Local development
+## Quick start (run the app)
 
 ### 1. Install dependencies
 
@@ -48,29 +38,58 @@ The exporter may produce a companion `sharp_web_predictor.onnx.data` file (exter
 bun install
 ```
 
+This also copies ONNX Runtime Web WASM assets into `public/ort/` automatically.
+
 ### 2. Start the app
 
 ```bash
 bun dev
 ```
 
-Open the local Vite URL and upload an image.
+Open the local URL shown by Vite (usually `http://localhost:5173`).
 
-## Exporting the SHARP model to ONNX
+### 3. Use the app
 
-You need a local clone of Apple SHARP and a Python environment with its dependencies (plus ONNX export support).
+1. Upload an image.
+2. Leave the default model URL as `/models/sharp_web_predictor.onnx` (recommended).
+3. Click `Generate Splat`.
+4. Preview the result and download the `.ply` file.
 
-### 1. Clone upstream SHARP (reference code)
+## Important model file note (`.onnx` + `.onnx.data`)
+
+SHARP exports usually produce **two files**:
+
+- `sharp_web_predictor.onnx`
+- `sharp_web_predictor.onnx.data`
+
+Both files must be served together from the same folder (for example `public/models/`).
+
+Why this matters:
+- The `.onnx` file is only the graph and metadata.
+- The `.onnx.data` file contains most of the model weights.
+
+For that reason, **Model URL mode** is the reliable option in the UI.
+Uploading only the `.onnx` file directly in the browser usually will not work because the `.onnx.data` sidecar is separate.
+
+## Export the SHARP model to ONNX (beginner-friendly steps)
+
+This repo does not require a backend, but you do need an exported SHARP ONNX model.
+
+### 1. Clone Apple's SHARP repo (reference code)
 
 ```bash
 git clone https://github.com/apple/ml-sharp /tmp/ml-sharp-upstream
 ```
 
-### 2. Prepare a Python env for SHARP + ONNX export
+### 2. Prepare a Python environment for export
 
-Use the upstream SHARP setup instructions first, then make sure PyTorch/ONNX export dependencies are installed. The exact package set can vary by platform.
+You need Python + SHARP dependencies + ONNX export dependencies.
+
+The easiest route is to follow the upstream SHARP setup first, then run this exporter script from this repo.
 
 ### 3. Export the browser predictor ONNX
+
+From this repo:
 
 ```bash
 python3 scripts/export_sharp_onnx.py \
@@ -78,37 +97,82 @@ python3 scripts/export_sharp_onnx.py \
   --output public/models/sharp_web_predictor.onnx
 ```
 
-If the exported model exceeds the ONNX single-file limit, the script will also write:
+If the model is large (it is), the script will also write:
 
 ```text
 public/models/sharp_web_predictor.onnx.data
 ```
 
-Both files must be served together.
+### Optional export flags
 
-Optional:
-- `--checkpoint /path/to/sharp_2572gikvuh.pt` to avoid auto-download
-- `--device cuda` if export on GPU is more stable/faster in your environment
-- `--opset 20` (default)
+- `--checkpoint /path/to/sharp_2572gikvuh.pt` to use a manually downloaded checkpoint
+- `--device cuda` to export on GPU (if your environment supports it)
+- `--opset 20` to change ONNX opset (default is `20`)
 
-## Runtime caveats
+## Local static build (optional)
 
-- SHARP is a large model. Browser memory usage is substantial.
-- ONNX Runtime Web operator support can vary by browser and backend (WebGPU vs WASM), but this project avoids ONNX `SVD` in the browser path by doing gaussian unprojection/decomposition in the worker.
-- The app defaults to filtering/capping splats (`opacityThreshold`, `maxGaussians`) to keep preview/export practical in-browser.
-- Focal length estimation from EXIF is approximate when the image lacks 35mm-equivalent EXIF data. The UI exposes a manual focal length override because SHARP quality depends on it.
+If you want a static build instead of running `bun dev`:
 
-## Stack
+```bash
+bun run build
+bun run preview
+```
 
-- Bun
-- React + TypeScript
-- Vite
-- ONNX Runtime Web
-- `@mkkellogg/gaussian-splats-3d` for preview rendering
+Notes:
+- `bun run build` copies `public/` into `dist/`, including the model files.
+- If `sharp_web_predictor.onnx.data` is present, the build output will be very large.
 
-## Next steps (recommended)
+## How it works (high level)
 
-- verify the ONNX export on a real SHARP checkpoint and pin the required Python/torch/onnx versions
-- benchmark browser compatibility (Chrome/Edge/Safari) with WebGPU
-- add an ONNX graph validation step and sample model metadata manifest
-- optionally add a quantized/fp16 export path to reduce model size and memory pressure
+- React + TypeScript UI (`src/`)
+- ONNX Runtime Web worker for inference (`src/workers/sharpWorker.ts`)
+- Browser-side SHARP postprocessing (NDC -> metric gaussian conversion)
+- Browser-side PLY writer
+- In-page preview with [`@mkkellogg/gaussian-splats-3d`](https://github.com/mkkellogg/GaussianSplats3D)
+
+## Troubleshooting
+
+### "expected magic word ... found 3c 21 64 6f" (WASM error)
+
+This means a WASM file request returned HTML instead.
+
+Try:
+- run the app with `bun dev` (not `file://...`)
+- restart the dev server after `bun install`
+- verify these load in your browser:
+  - `/ort/ort-wasm-simd-threaded.asyncify.mjs`
+  - `/ort/ort-wasm-simd-threaded.asyncify.wasm`
+
+### "Failed to load external data file ... sharp_web_predictor.onnx.data"
+
+This means the ONNX sidecar file is missing or not served correctly.
+
+Check:
+- `public/models/sharp_web_predictor.onnx`
+- `public/models/sharp_web_predictor.onnx.data`
+- Use the default **Model URL** (`/models/sharp_web_predictor.onnx`) in the UI
+
+### The app runs, but generation is very slow or crashes
+
+SHARP is large and browser inference is heavy.
+
+Try:
+- Chrome or Edge (desktop)
+- smaller `Max gaussians` in the UI
+- closing other memory-heavy tabs/apps
+- waiting longer on first run (model + runtime initialization can take time)
+
+## Tech stack
+
+- [Bun](https://bun.sh/)
+- [React](https://react.dev/)
+- [TypeScript](https://www.typescriptlang.org/)
+- [Vite](https://vite.dev/)
+- [ONNX Runtime Web](https://onnxruntime.ai/)
+- [GaussianSplats3D viewer](https://github.com/mkkellogg/GaussianSplats3D)
+
+## Project status
+
+Working prototype / experimental.
+
+The app runs end-to-end in the browser, but performance and compatibility depend heavily on browser WebGPU/WASM support and your machine's available memory.
