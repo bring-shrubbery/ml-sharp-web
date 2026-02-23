@@ -1,6 +1,6 @@
 # ml-sharp-web
 
-A browser-based Gaussian splat generator built on top of [Apple SHARP](https://github.com/apple/ml-sharp).
+A browser-based Gaussian splat generator built on top of [Apple SHARP](https://github.com/apple/ml-sharp). ✨
 
 This project lets you:
 - upload one image
@@ -30,9 +30,15 @@ If you use Apple's released SHARP checkpoint/weights, you must follow `LICENSE_M
 - A modern desktop browser (Chrome or Edge recommended)
 - Enough disk space and RAM for the SHARP model (the exported ONNX sidecar is large, ~2.4 GB)
 
-## Quick start (run the app)
+## Quick start (run the app) 🚀
 
-### 1. Install dependencies
+### 1. Star this repo 🤩
+
+If this project helps you, please star it:
+
+- [bring-shrubbery/ml-sharp-web](https://github.com/bring-shrubbery/ml-sharp-web)
+
+### 2. Install dependencies
 
 ```bash
 bun install
@@ -40,7 +46,7 @@ bun install
 
 This also copies ONNX Runtime Web WASM assets into `public/ort/` automatically.
 
-### 2. Start the app
+### 3. Start the app
 
 ```bash
 bun dev
@@ -48,7 +54,7 @@ bun dev
 
 Open the URL shown by Vite (usually `http://localhost:5173`).
 
-### 3. Use the app
+### 4. Use the app
 
 1. Upload an image.
 2. Click `Generate Splat`.
@@ -129,7 +135,7 @@ Notes:
 - Browser-side PLY writer
 - In-page preview with [`@mkkellogg/gaussian-splats-3d`](https://github.com/mkkellogg/GaussianSplats3D)
 
-## Troubleshooting
+## Troubleshooting 🛠️
 
 ### "expected magic word ... found 3c 21 64 6f" (WASM error)
 
@@ -172,6 +178,6 @@ Try:
 
 ## Project status
 
-Working prototype / experimental.
+Working prototype / experimental. 🧪
 
 The app runs end-to-end in the browser, but performance and compatibility depend heavily on browser WebGPU/WASM support and your machine's available memory.

@@ -254,13 +254,6 @@ function App() {
             and download a `.ply` file. Everything runs in the browser.
           </p>
         </div>
-        <div className="license-callout">
-          <strong>License reminder</strong>
-          <p>
-            Apple&apos;s released SHARP model weights are licensed for research purposes only. This UI is open
-            source, but your model/weights usage must comply with the upstream `LICENSE_MODEL`.
-          </p>
-        </div>
       </header>
 
       <main className="grid">
@@ -403,10 +396,20 @@ function App() {
 
       <footer className="footer-note">
         <p>
-          This app expects an exported SHARP predictor ONNX with outputs `mean_vectors_ndc`,
-          `singular_values_ndc`, `quaternions_ndc`, `colors`, and `opacities`. Use
-          `scripts/export_sharp_onnx.py` to generate it from the upstream SHARP checkpoint. If a
-          `.onnx.data` sidecar is produced, keep it next to the `.onnx` file under `/models/`.
+          License note: Apple&apos;s released SHARP model weights are subject to upstream research-use
+          restrictions. Please review{' '}
+          <a
+            href="https://github.com/apple/ml-sharp/blob/main/LICENSE_MODEL"
+            target="_blank"
+            rel="noreferrer"
+          >
+            LICENSE_MODEL
+          </a>{' '}
+          (and{' '}
+          <a href="https://github.com/apple/ml-sharp/blob/main/LICENSE" target="_blank" rel="noreferrer">
+            LICENSE
+          </a>
+          ) before using the model files.
         </p>
       </footer>
     </div>

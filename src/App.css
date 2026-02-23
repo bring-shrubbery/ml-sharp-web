@@ -55,7 +55,7 @@ body {
   position: relative;
   display: grid;
   gap: 1rem;
-  grid-template-columns: 1.35fr 1fr;
+  grid-template-columns: 1fr;
   padding: 1rem;
   border: var(--panel-border);
   border-radius: var(--panel-radius);
@@ -124,33 +124,6 @@ body {
   max-width: 64ch;
   color: var(--ink-soft);
   line-height: 1.45;
-}
-
-.license-callout {
-  align-self: start;
-  border: var(--panel-border);
-  border-radius: 14px;
-  padding: 0.95rem;
-  background:
-    linear-gradient(90deg, var(--red) 0 22%, var(--yellow) 22% 44%, var(--blue) 44% 66%, transparent 66% 100%)
-      top/100% 10px no-repeat,
-    #fffdf7;
-  box-shadow: 5px 5px 0 rgb(17 17 17 / 8%);
-}
-
-.license-callout strong {
-  display: block;
-  margin-top: 0.15rem;
-  margin-bottom: 0.35rem;
-  font: 700 1rem/1 'League Spartan', sans-serif;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.license-callout p {
-  margin: 0;
-  color: var(--ink-soft);
-  line-height: 1.4;
 }
 
 .grid {
@@ -512,23 +485,25 @@ a.btn:not(.btn-disabled) {
 .footer-note {
   margin-top: 1rem;
   color: var(--ink-soft);
-  font-size: 0.88rem;
-  border-top: 2px solid rgb(17 17 17 / 16%);
-  padding-top: 0.8rem;
+  font-size: 0.78rem;
+  border-top: 1px solid rgb(17 17 17 / 16%);
+  padding-top: 0.65rem;
 }
 
 .footer-note p {
   margin: 0;
-  line-height: 1.45;
+  line-height: 1.35;
 }
 
-.footer-note code {
+.footer-note a {
   color: var(--ink);
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.9em;
-  background: rgb(17 17 17 / 4%);
-  padding: 0.08rem 0.25rem;
-  border-radius: 4px;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.footer-note a:hover {
+  color: var(--blue);
 }
 
 @media (max-width: 1180px) {
