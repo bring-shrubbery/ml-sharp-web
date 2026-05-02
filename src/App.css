@@ -1,13 +1,14 @@
 @import url('https://fonts.googleapis.com/css2?family=League+Spartan:wght@400;500;700;800&family=Manrope:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 :root {
-  --paper: #f4f0e6;
-  --paper-2: #fbf7ef;
+  --paper: #f3f3f3;
+  --paper-2: #fafafa;
+  --surface: #ffffff;
   --ink: #111111;
-  --ink-soft: #4f4a43;
-  --ink-faint: #7f776d;
+  --ink-soft: #525252;
+  --ink-faint: #7a7a7a;
   --line: #161616;
-  --shadow: rgba(17, 17, 17, 0.12);
+  --shadow: rgba(17, 17, 17, 0.10);
   --red: #e13a2f;
   --blue: #1f52d6;
   --yellow: #f2b318;
@@ -26,16 +27,10 @@ body {
   color: var(--ink);
   font-family: 'Manrope', sans-serif;
   background:
-    radial-gradient(circle at 8% 8%, rgb(225 58 47 / 14%) 0 88px, transparent 90px),
-    radial-gradient(circle at 87% 11%, rgb(31 82 214 / 14%) 0 70px, transparent 72px),
-    linear-gradient(140deg, rgb(242 179 24 / 14%) 0 12%, transparent 12% 100%),
-    linear-gradient(transparent 31px, rgb(17 17 17 / 3%) 32px),
-    linear-gradient(90deg, transparent 31px, rgb(17 17 17 / 3%) 32px),
+    linear-gradient(transparent 31px, rgb(17 17 17 / 4%) 32px),
+    linear-gradient(90deg, transparent 31px, rgb(17 17 17 / 4%) 32px),
     var(--paper);
   background-size:
-    auto,
-    auto,
-    auto,
     32px 32px,
     32px 32px,
     auto;
@@ -59,42 +54,47 @@ body {
   padding: 1rem;
   border: var(--panel-border);
   border-radius: var(--panel-radius);
-  background: linear-gradient(180deg, var(--paper-2), #f1ebde);
+  background: var(--paper-2);
   box-shadow: 8px 8px 0 var(--shadow);
-  overflow: hidden;
 }
 
-.hero::before,
-.hero::after {
-  content: '';
+.top-links {
   position: absolute;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.hero::before {
-  width: 126px;
-  height: 126px;
-  right: -30px;
-  top: -34px;
-  border-radius: 999px;
-  background: rgb(31 82 214 / 18%);
-  border: 2px solid rgb(31 82 214 / 35%);
-}
-
-.hero::after {
-  width: 96px;
-  height: 22px;
-  left: auto;
+  top: 1rem;
   right: 1rem;
-  bottom: 1rem;
-  background: linear-gradient(90deg, var(--red) 0 33%, var(--yellow) 33% 66%, var(--blue) 66% 100%);
-  border: 2px solid var(--line);
+  display: flex;
+  gap: 0.5rem;
+  z-index: 2;
 }
 
-.hero > * {
-  position: relative;
-  z-index: 1;
+.top-link {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+  box-shadow: 3px 3px 0 var(--shadow);
+  transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+}
+
+.top-link:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 var(--shadow);
+}
+
+.top-link:active {
+  transform: translate(0, 0);
+  box-shadow: 1px 1px 0 var(--shadow);
+}
+
+.top-link svg {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .eyebrow {
@@ -137,20 +137,8 @@ body {
   position: relative;
   border: var(--panel-border);
   border-radius: var(--panel-radius);
-  background: rgba(255, 252, 245, 0.92);
+  background: var(--surface);
   box-shadow: 8px 8px 0 var(--shadow);
-}
-
-.panel::before {
-  content: '';
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
-  border: 2px solid var(--line);
-  background: var(--red);
 }
 
 .controls-panel {
@@ -187,7 +175,7 @@ body {
   width: 100%;
   border: 2px solid var(--line);
   border-radius: 10px;
-  background: #fffdf7;
+  background: var(--surface);
   color: var(--ink);
   padding: 0.72rem 0.8rem;
   font: 500 0.95rem/1.2 'Manrope', sans-serif;
@@ -201,7 +189,7 @@ body {
 }
 
 .field input:disabled {
-  background: #efe9dc;
+  background: #ebebeb;
   color: var(--ink-faint);
 }
 
@@ -229,9 +217,7 @@ body {
   border: 2px solid var(--line);
   border-radius: 10px;
   padding: 0.65rem 0.75rem;
-  background:
-    linear-gradient(90deg, rgb(242 179 24 / 18%), rgb(242 179 24 / 0) 45%),
-    #fffdf7;
+  background: var(--surface);
   display: flex;
   align-items: center;
   font-size: 0.9rem;
@@ -247,7 +233,7 @@ body {
 
 .btn {
   border: 2px solid var(--line);
-  background: #fffdf7;
+  background: var(--surface);
   color: var(--ink);
   border-radius: 10px;
   padding: 0.72rem 0.95rem;
@@ -297,9 +283,7 @@ a.btn:not(.btn-disabled) {
   margin-top: 1rem;
   border-radius: 12px;
   border: 2px solid var(--line);
-  background:
-    linear-gradient(90deg, rgb(31 82 214 / 12%) 0 10px, transparent 10px),
-    #fffdf7;
+  background: var(--surface);
   padding: 0.8rem;
   box-shadow: 4px 4px 0 rgb(17 17 17 / 7%);
 }
@@ -365,7 +349,7 @@ a.btn:not(.btn-disabled) {
   border: 2px solid var(--line);
   border-radius: 999px;
   padding: 0.35rem 0.55rem;
-  background: #fffdf7;
+  background: var(--surface);
 }
 
 .image-frame {
@@ -373,10 +357,7 @@ a.btn:not(.btn-disabled) {
   border-radius: 12px;
   min-height: 260px;
   border: 2px dashed var(--line);
-  background:
-    linear-gradient(135deg, rgb(242 179 24 / 10%) 0 22%, transparent 22% 100%),
-    linear-gradient(315deg, rgb(31 82 214 / 9%) 0 18%, transparent 18% 100%),
-    #fffdf7;
+  background: var(--surface);
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -425,39 +406,8 @@ a.btn:not(.btn-disabled) {
   border-radius: 12px;
   overflow: hidden;
   border: 2px solid var(--line);
-  background:
-    radial-gradient(circle at 18% 20%, rgb(242 179 24 / 15%) 0 52px, transparent 54px),
-    radial-gradient(circle at 86% 78%, rgb(225 58 47 / 16%) 0 42px, transparent 44px),
-    linear-gradient(0deg, #060606, #111);
+  background: linear-gradient(0deg, #060606, #111);
   box-shadow: inset 0 0 0 2px rgb(255 255 255 / 6%);
-}
-
-.splat-canvas-shell::before,
-.splat-canvas-shell::after {
-  content: '';
-  position: absolute;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.splat-canvas-shell::before {
-  top: 0;
-  left: 0;
-  width: 52px;
-  height: 14px;
-  background: var(--yellow);
-  border-right: 2px solid var(--line);
-  border-bottom: 2px solid var(--line);
-}
-
-.splat-canvas-shell::after {
-  top: 14px;
-  left: 0;
-  width: 26px;
-  height: 26px;
-  background: var(--blue);
-  border-right: 2px solid var(--line);
-  border-bottom: 2px solid var(--line);
 }
 
 .splat-canvas-host {
@@ -538,6 +488,20 @@ a.btn:not(.btn-disabled) {
   .hero,
   .panel {
     box-shadow: 5px 5px 0 var(--shadow);
+  }
+
+  .top-links {
+    top: 0.65rem;
+    right: 0.65rem;
+  }
+
+  .top-link {
+    width: 36px;
+    height: 36px;
+  }
+
+  .hero > div {
+    padding-top: 2.25rem;
   }
 
   .two-col {
