@@ -191,9 +191,6 @@ async function createSession(modelUrl: string, requestId?: string): Promise<ort.
     ]
   }
 
-  postStatus('loading-model', 'Loading model graph…', requestId)
-  const modelBytes = await fetchBytesWithProgress(modelUrl, 'Loading model graph', requestId)
-
   postStatus('loading-model', 'Initializing ONNX Runtime…', requestId)
   const sessionOptionsGpu: ort.InferenceSession.SessionOptions = {
     ...baseSessionOptions,
@@ -204,11 +201,16 @@ async function createSession(modelUrl: string, requestId?: string): Promise<ort.
     executionProviders: ['wasm'],
   }
 
+  // Pass the model itself as a URL (not bytes). ORT-web's external-data
+  // resolution path only initializes `Module.MountedFiles` correctly when the
+  // model load goes through the URL-fetch code path. The .onnx graph is small
+  // (~6 MB) so we trade its progress for the >2 GB sidecar progress, which is
+  // the only one users actually wait on.
   try {
     try {
-      return await ort.InferenceSession.create(modelBytes, sessionOptionsGpu)
+      return await ort.InferenceSession.create(modelUrl, sessionOptionsGpu)
     } catch (webGpuError) {
-      return await ort.InferenceSession.create(modelBytes, sessionOptionsWasm).catch((wasmError) => {
+      return await ort.InferenceSession.create(modelUrl, sessionOptionsWasm).catch((wasmError) => {
         throw new Error(
           `Could not create ONNX Runtime session with WebGPU or WASM. WebGPU error: ${String(webGpuError)}. WASM error: ${String(wasmError)}`,
         )
