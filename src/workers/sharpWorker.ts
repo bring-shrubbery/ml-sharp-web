@@ -156,7 +156,7 @@ async function createSession(modelUrl: string, requestId?: string): Promise<ort.
     graphOptimizationLevel: 'all',
   }
 
-  let sidecarBytes: Uint8Array | null = null
+  let sidecarBlobUrl: string | null = null
   let sidecarPath: string | null = null
   try {
     const resolved = new URL(modelUrl, self.location.href)
@@ -164,20 +164,29 @@ async function createSession(modelUrl: string, requestId?: string): Promise<ort.
       const sidecarUrl = new URL(resolved.href)
       sidecarUrl.pathname = `${resolved.pathname}.data`
       sidecarPath = `${resolved.pathname.split('/').pop() ?? 'model.onnx'}.data`
-      sidecarBytes = await fetchBytesWithProgress(sidecarUrl.href, 'Loading model weights', requestId)
+      const sidecarBytes = await fetchBytesWithProgress(
+        sidecarUrl.href,
+        'Loading model weights',
+        requestId,
+      )
+      // ORT-web 1.24 doesn't initialize Module.MountedFiles when externalData is
+      // passed as a Uint8Array, so we hand it a blob: URL pointing at the bytes
+      // we already fetched. ORT's internal fetcher reads it instantly from
+      // memory while the user sees real download progress for our fetch.
+      const sidecarBlob = new Blob([sidecarBytes as BlobPart], { type: 'application/octet-stream' })
+      sidecarBlobUrl = URL.createObjectURL(sidecarBlob)
     }
   } catch (err) {
-    // Re-throw fetch errors; URL parsing failures are silently ignored (handled by ORT).
     if (err instanceof Error && err.message.startsWith('HTTP')) {
       throw err
     }
   }
 
-  if (sidecarBytes && sidecarPath) {
+  if (sidecarBlobUrl && sidecarPath) {
     baseSessionOptions.externalData = [
       {
         path: sidecarPath,
-        data: sidecarBytes,
+        data: sidecarBlobUrl,
       },
     ]
   }
@@ -186,20 +195,29 @@ async function createSession(modelUrl: string, requestId?: string): Promise<ort.
   const modelBytes = await fetchBytesWithProgress(modelUrl, 'Loading model graph', requestId)
 
   postStatus('loading-model', 'Initializing ONNX Runtime…', requestId)
+  const sessionOptionsGpu: ort.InferenceSession.SessionOptions = {
+    ...baseSessionOptions,
+    executionProviders: ['webgpu', 'wasm'],
+  }
+  const sessionOptionsWasm: ort.InferenceSession.SessionOptions = {
+    ...baseSessionOptions,
+    executionProviders: ['wasm'],
+  }
+
   try {
-    return await ort.InferenceSession.create(modelBytes, {
-      ...baseSessionOptions,
-      executionProviders: ['webgpu', 'wasm'],
-    })
-  } catch (webGpuError) {
-    return ort.InferenceSession.create(modelBytes, {
-      ...baseSessionOptions,
-      executionProviders: ['wasm'],
-    }).catch((wasmError) => {
-      throw new Error(
-        `Could not create ONNX Runtime session with WebGPU or WASM. WebGPU error: ${String(webGpuError)}. WASM error: ${String(wasmError)}`,
-      )
-    })
+    try {
+      return await ort.InferenceSession.create(modelBytes, sessionOptionsGpu)
+    } catch (webGpuError) {
+      return await ort.InferenceSession.create(modelBytes, sessionOptionsWasm).catch((wasmError) => {
+        throw new Error(
+          `Could not create ONNX Runtime session with WebGPU or WASM. WebGPU error: ${String(webGpuError)}. WASM error: ${String(wasmError)}`,
+        )
+      })
+    }
+  } finally {
+    if (sidecarBlobUrl) {
+      URL.revokeObjectURL(sidecarBlobUrl)
+    }
   }
 }
 
