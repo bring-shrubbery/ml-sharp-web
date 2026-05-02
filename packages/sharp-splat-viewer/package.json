@@ -40,6 +40,9 @@
     "@mkkellogg/gaussian-splats-3d": "^0.4.7",
     "three": "^0.183.0"
   },
+  "dependencies": {
+    "@ml-sharp-web/ply-metadata": "workspace:*"
+  },
   "devDependencies": {
     "@mkkellogg/gaussian-splats-3d": "^0.4.7",
     "three": "^0.183.1",

@@ -11,7 +11,17 @@
  *   <sharp-splat src="my.ply" style="width:600px;height:400px"></sharp-splat>
  */
 
-import { readSharpViewerMeta, type SharpViewerMeta } from './plyMetadata'
+import { readSharpViewerMeta } from '@ml-sharp-web/ply-metadata'
+
+interface SharpViewerMeta {
+  cameraPosition?: [number, number, number]
+  cameraTarget?: [number, number, number]
+  cameraUp?: [number, number, number]
+  fov?: number
+  bgColor?: string
+  maxScreenSize?: number
+  autoRotate?: boolean
+}
 
 const OBSERVED_ATTRS = [
   'src',
@@ -287,4 +297,3 @@ if (typeof customElements !== 'undefined' && !customElements.get('sharp-splat'))
 }
 
 export type { SharpViewerMeta }
-export { readSharpViewerMeta } from './plyMetadata'

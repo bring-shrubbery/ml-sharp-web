@@ -6,6 +6,7 @@
       "name": "ml-sharp-web",
       "dependencies": {
         "@mkkellogg/gaussian-splats-3d": "^0.4.7",
+        "@ml-sharp-web/ply-metadata": "workspace:*",
         "exifr": "^7.1.3",
         "onnxruntime-web": "^1.24.2",
         "react": "^19.2.0",
@@ -27,9 +28,16 @@
         "vite": "^7.3.1",
       },
     },
+    "packages/ply-metadata": {
+      "name": "@ml-sharp-web/ply-metadata",
+      "version": "0.0.0",
+    },
     "packages/sharp-splat-viewer": {
       "name": "@bring-shrubbery/sharp-splat-viewer",
       "version": "0.1.0",
+      "dependencies": {
+        "@ml-sharp-web/ply-metadata": "workspace:*",
+      },
       "devDependencies": {
         "@mkkellogg/gaussian-splats-3d": "^0.4.7",
         "three": "^0.183.1",
@@ -181,6 +189,8 @@
     "@microsoft/tsdoc-config": ["@microsoft/tsdoc-config@0.18.1", "", { "dependencies": { "@microsoft/tsdoc": "0.16.0", "ajv": "~8.18.0", "jju": "~1.4.0", "resolve": "~1.22.2" } }, "sha512-9brPoVdfN9k9g0dcWkFeA7IH9bbcttzDJlXvkf8b2OBzd5MueR1V2wkKBL0abn0otvmkHJC6aapBOTJDDeMCZg=="],
 
     "@mkkellogg/gaussian-splats-3d": ["@mkkellogg/gaussian-splats-3d@0.4.7", "", { "peerDependencies": { "three": ">=0.160.0" } }, "sha512-0vy9/i9sJLFH/v3WJZ4axCsqjkToe8UsV3xY7bvK5EUC0akiRsWZODoCiSzpxhTLNyzSKTsyQKozIFeNA5RWRA=="],
+
+    "@ml-sharp-web/ply-metadata": ["@ml-sharp-web/ply-metadata@workspace:packages/ply-metadata"],
 
     "@protobufjs/aspromise": ["@protobufjs/aspromise@1.1.2", "", {}, "sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ=="],
 
