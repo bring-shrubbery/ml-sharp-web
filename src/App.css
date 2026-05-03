@@ -350,6 +350,13 @@ a.btn:not(.btn-disabled) {
   gap: 0.45rem;
 }
 
+.model-loader-label {
+  font: 500 0.76rem/1.1 'IBM Plex Mono', monospace;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
 .model-loader-row {
   display: flex;
   flex-wrap: wrap;
@@ -362,17 +369,74 @@ a.btn:not(.btn-disabled) {
   cursor: default;
 }
 
-.model-loader[data-state='loaded'] .model-loader-btn {
-  background: linear-gradient(135deg, #2bb673, #1f8f53);
-  border-color: #0f0f0f;
-  color: #fff;
+.model-loader-or {
+  font: 500 0.74rem/1 'IBM Plex Mono', monospace;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.model-loader-upload {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.model-loader-filename {
+  font: 500 0.85rem/1.2 'IBM Plex Mono', monospace;
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  flex: 1;
+  min-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-loader-reset {
+  margin-left: auto;
+  background: var(--surface);
+  font-size: 0.74rem;
+  padding: 0.5rem 0.7rem;
+}
+
+.model-loader-status-loaded {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font: 600 0.85rem/1.2 'IBM Plex Mono', monospace;
+  color: var(--green);
+  background: rgb(31 143 83 / 8%);
+  border: 2px solid var(--green);
+  border-radius: 8px;
+  padding: 0.4rem 0.65rem;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-loader-status-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font: 600 0.85rem/1.2 'IBM Plex Mono', monospace;
+  color: var(--blue);
+  background: rgb(31 82 214 / 8%);
+  border: 2px solid var(--blue);
+  border-radius: 8px;
+  padding: 0.4rem 0.65rem;
+  flex: 1;
 }
 
 .model-loader-hint {
-  font: 500 0.74rem/1.3 'IBM Plex Mono', monospace;
   color: var(--ink-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 0.74rem;
+  line-height: 1.4;
 }
 
 .status-card[data-stage='running-inference'] .status-dot {

@@ -46,6 +46,21 @@ export class SharpWorkerClient {
     this.worker.terminate()
   }
 
+  reset(): void {
+    this.rejectAll(new Error('Worker reset'))
+    this.worker.terminate()
+    this.worker = new Worker(new URL('../workers/sharpWorker.ts', import.meta.url), {
+      type: 'module',
+    })
+    this.worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
+      this.handleMessage(event.data)
+    }
+    this.worker.onerror = (event) => {
+      const error = new Error(event.message || 'Worker error')
+      this.rejectAll(error)
+    }
+  }
+
   async loadModel(payload: LoadModelRequestPayload): Promise<{ modelUrl: string }> {
     return this.request('load-model', payload)
   }

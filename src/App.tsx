@@ -177,6 +177,21 @@ function App() {
     }
   }, [effectiveModelUrl])
 
+  const handleResetModel = useCallback(() => {
+    const message = modelLoadState === 'loading'
+      ? 'Cancel the model load? The current download will be aborted.'
+      : 'Reset the model? This will clear the loaded session and any uploaded file. You will need to load again to generate.'
+    if (!window.confirm(message)) return
+    workerRef.current?.reset()
+    setModelFile(null)
+    loadedModelUrlRef.current = null
+    setModelLoadState('idle')
+    setStatusText('Load the model to begin.')
+    setWorkerStage('idle')
+    setWorkerProgress(undefined)
+    setErrorText(null)
+  }, [modelLoadState])
+
   const resultRatio =
     result && result.totalGaussians > 0 ? (100 * result.selectedGaussians) / result.totalGaussians : 0
   const resultSummary = result
@@ -401,25 +416,74 @@ function App() {
           <h2>Inputs</h2>
 
           <div className="model-loader" data-state={modelLoadState}>
-            <div className="model-loader-row">
-              <button
-                type="button"
-                className="btn btn-primary model-loader-btn"
-                onClick={() => void handleLoadModel()}
-                disabled={!canLoadModel || modelLoaded}
-              >
-                {modelLoadState === 'loading'
-                  ? 'Loading…'
-                  : modelLoaded
-                    ? 'Model loaded ✓'
-                    : modelLoadState === 'error'
-                      ? 'Retry load'
-                      : 'Load model'}
-              </button>
-              <span className="model-loader-hint">
-                SHARP predictor (~2.4 GB) • required before generating
-              </span>
-            </div>
+            <span className="model-loader-label">Model</span>
+            {modelLoaded ? (
+              <div className="model-loader-row">
+                <span className="model-loader-status-loaded">
+                  ✓ {modelFile ? `Loaded ${modelFile.name}` : 'Loaded SHARP predictor'}
+                </span>
+                <button type="button" className="btn model-loader-reset" onClick={handleResetModel}>
+                  Reset
+                </button>
+              </div>
+            ) : modelLoadState === 'loading' ? (
+              <div className="model-loader-row">
+                <span className="model-loader-status-loading">Loading…</span>
+                <button type="button" className="btn model-loader-reset" onClick={handleResetModel}>
+                  Cancel
+                </button>
+              </div>
+            ) : modelFile ? (
+              <div className="model-loader-row">
+                <button
+                  type="button"
+                  className="btn btn-primary model-loader-btn"
+                  onClick={() => void handleLoadModel()}
+                  disabled={!canLoadModel}
+                >
+                  Load uploaded model
+                </button>
+                <span className="model-loader-filename">{modelFile.name}</span>
+                <button type="button" className="btn model-loader-reset" onClick={handleResetModel}>
+                  Reset
+                </button>
+              </div>
+            ) : (
+              <div className="model-loader-row">
+                <button
+                  type="button"
+                  className="btn btn-primary model-loader-btn"
+                  onClick={() => void handleLoadModel()}
+                  disabled={!canLoadModel}
+                >
+                  {modelLoadState === 'error' ? 'Retry hosted load' : 'Load hosted model'}
+                </button>
+                <span className="model-loader-or">or</span>
+                <label className="btn model-loader-upload">
+                  Upload .onnx
+                  <input
+                    type="file"
+                    accept=".onnx,application/octet-stream"
+                    hidden
+                    onChange={(event) => setModelFile(event.currentTarget.files?.[0] ?? null)}
+                  />
+                </label>
+                {modelLoadState === 'error' ? (
+                  <button type="button" className="btn model-loader-reset" onClick={handleResetModel}>
+                    Reset
+                  </button>
+                ) : null}
+              </div>
+            )}
+            <small className="model-loader-hint">
+              {modelLoaded
+                ? 'Click Reset to switch models or upload your own.'
+                : modelLoadState === 'loading'
+                  ? 'Cancelling will terminate the worker mid-fetch.'
+                  : modelFile
+                    ? 'SHARP exports usually include a companion .onnx.data sidecar — uploaded .onnx files alone often will not work.'
+                    : 'Hosted SHARP predictor (~2.4 GB) — or upload your own ONNX export.'}
+            </small>
           </div>
 
           <label className="field">
@@ -432,20 +496,6 @@ function App() {
                 void handleImageSelection(file)
               }}
             />
-          </label>
-
-          <label className="field">
-            <span>Optional: upload ONNX file</span>
-            <input
-              type="file"
-              accept=".onnx,application/octet-stream"
-              onChange={(event) => setModelFile(event.currentTarget.files?.[0] ?? null)}
-            />
-            <small>
-              {modelFile
-                ? `Using uploaded model: ${modelFile.name}`
-                : 'Optional override for testing. The app uses the hosted model by default. Note: SHARP exports usually include a companion `.onnx.data` file, so uploaded `.onnx` files alone often will not work.'}
-            </small>
           </label>
 
           <div className="field-grid two-col">
