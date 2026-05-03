@@ -1,5 +1,7 @@
 # ml-sharp-web
 
+![ml-sharp-web preview](docs/preview.gif)
+
 A browser-based Gaussian splat generator built on top of [Apple SHARP](https://github.com/apple/ml-sharp). ✨
 
 This project lets you:
