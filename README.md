@@ -11,6 +11,7 @@ This project lets you:
 ## Links
 
 - Project repo: [bring-shrubbery/ml-sharp-web](https://github.com/bring-shrubbery/ml-sharp-web)
+- Follow the author on X: [@bringshrubberyy](https://x.com/bringshrubberyy)
 - Upstream SHARP repo (Apple): [apple/ml-sharp](https://github.com/apple/ml-sharp)
 - SHARP project page: [apple.github.io/ml-sharp](https://apple.github.io/ml-sharp/)
 - SHARP paper: [arXiv:2512.10685](https://arxiv.org/abs/2512.10685)
