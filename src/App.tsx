@@ -84,6 +84,7 @@ function App() {
   const [generationKey, setGenerationKey] = useState(0)
 
   const [modelLoadState, setModelLoadState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
+  const [loadElapsedSec, setLoadElapsedSec] = useState(0)
   const loadedModelUrlRef = useRef<string | null>(null)
 
   const [bgColor, setBgColor] = useState<string>(DEFAULT_BG_COLOR)
@@ -161,6 +162,19 @@ function App() {
       setStatusText('Model URL changed — load the model again to proceed.')
     }
   }, [effectiveModelUrl])
+
+  useEffect(() => {
+    if (modelLoadState !== 'loading') {
+      setLoadElapsedSec(0)
+      return
+    }
+    const startedAt = Date.now()
+    setLoadElapsedSec(0)
+    const interval = window.setInterval(() => {
+      setLoadElapsedSec(Math.floor((Date.now() - startedAt) / 1000))
+    }, 1000)
+    return () => window.clearInterval(interval)
+  }, [modelLoadState])
 
   const handleLoadModel = useCallback(async () => {
     if (!workerRef.current || !effectiveModelUrl) return
@@ -446,7 +460,11 @@ function App() {
               </div>
             ) : modelLoadState === 'loading' ? (
               <div className="model-loader-row">
-                <span className="model-loader-status-loading">Loading…</span>
+                <span className="model-loader-status-loading">
+                  <span className="model-loader-spinner" aria-hidden />
+                  Loading… {String(Math.floor(loadElapsedSec / 60)).padStart(2, '0')}:
+                  {String(loadElapsedSec % 60).padStart(2, '0')}
+                </span>
                 <button type="button" className="btn model-loader-reset" onClick={handleResetModel}>
                   Cancel
                 </button>
