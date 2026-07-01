@@ -19,8 +19,11 @@ const DEFAULT_MAX_SCREEN_SIZE = 2048
 
 type RendererChoice = 'mkkellogg' | 'aholo'
 const DEFAULT_SPLAT_POSITION: [number, number, number] = [0, 0, 0]
-const DEFAULT_SPLAT_ROTATION: [number, number, number] = [0, 0, 0]
-const DEFAULT_SPLAT_FLIP: [boolean, boolean, boolean] = [false, false, false]
+// SHARP's raw output is mirrored and back-to-front, so the model-correct
+// orientation is: flip X, flip Y, then 180° about the vertical (Y) axis.
+// Transforms compose scale-then-rotate, so this is flip [X,Y] + rotate Y 180°.
+const DEFAULT_SPLAT_ROTATION: [number, number, number] = [0, 180, 0]
+const DEFAULT_SPLAT_FLIP: [boolean, boolean, boolean] = [true, true, false]
 
 interface SelectedImage {
   file: File
