@@ -108,6 +108,23 @@ function App() {
     actionsRef.current[action]?.()
   }, [])
 
+  const effectiveModelUrl = modelFileUrl ?? DEFAULT_WEB_MODEL_URL
+  const modelLoaded = modelLoadState === 'loaded' && loadedModelUrlRef.current === effectiveModelUrl
+
+  // Once the model is loaded, the load/upload buttons are replaced by a static
+  // "loaded" indicator so it can't be loaded twice. Typed as a plain record so
+  // the branch difference doesn't collapse the config's inferred value types.
+  const modelSection: Record<string, { type: 'action'; label: string }> = modelLoaded
+    ? {
+        loaded: { type: 'action', label: '✓ Model loaded' },
+        resetModel: { type: 'action', label: 'Reset model' },
+      }
+    : {
+        loadModel: { type: 'action', label: 'Load model' },
+        uploadModel: { type: 'action', label: 'Upload .onnx' },
+        resetModel: { type: 'action', label: 'Reset model' },
+      }
+
   // A single panel whose controls are grouped into labelled folders that follow
   // the workflow: Model → Image → Generation → Export → Viewer. The viewer
   // folder starts collapsed (`_collapsed`); DialKit only supports collapsing
@@ -117,11 +134,7 @@ function App() {
   const controls = useDialKitController(
     'SHARP',
     {
-      model: {
-        loadModel: { type: 'action', label: 'Load model' },
-        uploadModel: { type: 'action', label: 'Upload .onnx' },
-        resetModel: { type: 'action', label: 'Reset model' },
-      },
+      model: modelSection,
       image: {
         uploadImage: { type: 'action', label: 'Upload image' },
         focal: [0, 0, 8000, 1],
@@ -202,10 +215,6 @@ function App() {
     }
   }, [selectedImage, result])
 
-  const effectiveModelUrl = modelFileUrl ?? DEFAULT_WEB_MODEL_URL
-
-  const modelLoaded = modelLoadState === 'loaded' && loadedModelUrlRef.current === effectiveModelUrl
-
   useEffect(() => {
     if (loadedModelUrlRef.current && loadedModelUrlRef.current !== effectiveModelUrl) {
       loadedModelUrlRef.current = null
@@ -226,6 +235,23 @@ function App() {
     }, 1000)
     return () => window.clearInterval(interval)
   }, [modelLoadState])
+
+  // DialKit action buttons expose no per-button hook, so tag the primary
+  // (Generate) and the "model loaded" indicator by label and re-tag whenever
+  // DialKit re-renders the panel, letting CSS style them distinctly.
+  useEffect(() => {
+    const tag = () => {
+      for (const el of document.querySelectorAll<HTMLButtonElement>('.dialkit-button')) {
+        const text = el.textContent?.trim() ?? ''
+        el.classList.toggle('dialkit-button--primary', text === 'Generate splat')
+        el.classList.toggle('dialkit-button--ok', text.startsWith('✓'))
+      }
+    }
+    tag()
+    const observer = new MutationObserver(tag)
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [])
 
   const handleLoadModel = async () => {
     if (!workerRef.current || !effectiveModelUrl || modelLoadState === 'loading') return
@@ -279,12 +305,18 @@ function App() {
       const info = await readImageInfo(file)
       const focalEstimate = await estimateFocalLengthFromFile(file, info.width, info.height)
 
+      const nextImage: SelectedImage = {
+        file,
+        previewUrl: previewUrl as string,
+        width: info.width,
+        height: info.height,
+        focalEstimate,
+      }
       setSelectedImage((previous) => {
         if (previous) URL.revokeObjectURL(previous.previewUrl)
-        return { file, previewUrl: previewUrl as string, width: info.width, height: info.height, focalEstimate }
+        return nextImage
       })
       controls.setValue('image.focal', focalEstimate.focalPx)
-      setStatusText('Image ready. Configure settings and generate the splat.')
       setResult((previous) => {
         if (previous) {
           URL.revokeObjectURL(previous.previewPlyUrl)
@@ -293,6 +325,13 @@ function App() {
         return null
       })
       setGenerationKey((key) => key + 1)
+
+      // Auto-generate as soon as an image is ready, provided the model is loaded.
+      if (modelLoaded) {
+        void runGeneration(nextImage, focalEstimate.focalPx)
+      } else {
+        setStatusText('Image ready. Load the model to generate.')
+      }
     } catch (error) {
       if (previewUrl) URL.revokeObjectURL(previewUrl)
       setErrorText(error instanceof Error ? error.message : String(error))
@@ -300,8 +339,10 @@ function App() {
     }
   }
 
-  const runGeneration = async () => {
-    if (!selectedImage) {
+  const runGeneration = async (imageArg?: SelectedImage, focalArg?: number) => {
+    const image = imageArg ?? selectedImage
+    const focal = focalArg ?? focalPx
+    if (!image) {
       setErrorText('Upload an image before generating.')
       return
     }
@@ -313,7 +354,7 @@ function App() {
       setErrorText('Load the model before generating.')
       return
     }
-    if (!Number.isFinite(focalPx) || focalPx <= 0) {
+    if (!Number.isFinite(focal) || focal <= 0) {
       setErrorText('Focal length must be a positive number.')
       return
     }
@@ -324,7 +365,7 @@ function App() {
     const startTime = performance.now()
 
     try {
-      const { tensor, width, height } = await imageFileToSharpTensor(selectedImage.file)
+      const { tensor, width, height } = await imageFileToSharpTensor(image.file)
 
       await workerRef.current.loadModel({ modelUrl: effectiveModelUrl })
       const inference = await workerRef.current.runInference({
@@ -332,8 +373,8 @@ function App() {
         imageTensor: tensor.buffer,
         imageWidth: width,
         imageHeight: height,
-        focalPx,
-        disparityFactor: focalPx / width,
+        focalPx: focal,
+        disparityFactor: focal / width,
         opacityThreshold: controls.values.generation.opacity,
         maxGaussians: controls.values.generation.maxGaussians,
       })
@@ -369,7 +410,7 @@ function App() {
           return {
             previewPlyUrl: plyUrl,
             downloadPlyUrl: plyUrl,
-            downloadName: inference.outputName ?? toOutputName(selectedImage.file.name),
+            downloadName: inference.outputName ?? toOutputName(image.file.name),
             selectedGaussians: inference.selectedGaussians,
             totalGaussians: inference.totalGaussians,
             fileSizeBytes: blob.size,

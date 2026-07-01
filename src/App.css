@@ -298,6 +298,24 @@ body {
   text-decoration: underline;
 }
 
+/* DialKit button accents (classes applied by App via label matching). */
+.dialkit-button.dialkit-button--primary {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 0 0 1px var(--accent), 0 6px 18px rgba(0, 113, 227, 0.35);
+}
+
+.dialkit-button.dialkit-button--primary:hover {
+  background: var(--accent-hover);
+}
+
+.dialkit-button.dialkit-button--ok {
+  color: var(--green);
+  font-weight: 600;
+  cursor: default;
+}
+
 @media (max-width: 640px) {
   .thumb-overlay {
     width: 120px;
