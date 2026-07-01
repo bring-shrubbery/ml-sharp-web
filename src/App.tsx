@@ -68,10 +68,6 @@ function toOutputName(fileName: string): string {
   return `${stem}.ply`
 }
 
-type Xyz = { x: number; y: number; z: number }
-const toXyz = (t: [number, number, number]): Xyz => ({ x: t[0], y: t[1], z: t[2] })
-const toFlipXyz = (t: [boolean, boolean, boolean]) => ({ x: t[0], y: t[1], z: t[2] })
-
 function App() {
   const workerRef = useRef<SharpWorkerClient | null>(null)
   const imageInputRef = useRef<HTMLInputElement | null>(null)
@@ -101,25 +97,33 @@ function App() {
   const [saveStatus, setSaveStatus] = useState<string | undefined>(undefined)
   const cameraSnapshotRef = useRef<CameraSnapshot | null>(null)
 
+  // Position and rotation are no longer user-editable — they hold the fixed
+  // SHARP orientation (or whatever a loaded PLY baked in). Flip stays editable,
+  // toggled by the Flip X/Y/Z action buttons.
+  const [splatPosition, setSplatPosition] = useState<[number, number, number]>(DEFAULT_SPLAT_POSITION)
+  const [splatRotation, setSplatRotation] = useState<[number, number, number]>(DEFAULT_SPLAT_ROTATION)
+  const [splatFlip, setSplatFlip] = useState<[boolean, boolean, boolean]>(DEFAULT_SPLAT_FLIP)
+
   const runAction = useCallback((action: string) => {
     actionsRef.current[action]?.()
   }, [])
 
+  // Controls are ordered to mirror the workflow: load a model, upload an image,
+  // set focal, tune generation params, then generate and export.
   const sharp = useDialKitController(
     'SHARP',
     {
-      uploadImage: { type: 'action', label: 'Upload image' },
       loadModel: { type: 'action', label: 'Load model' },
       uploadModel: { type: 'action', label: 'Upload .onnx' },
       resetModel: { type: 'action', label: 'Reset model' },
+      uploadImage: { type: 'action', label: 'Upload image' },
+      focal: [0, 0, 8000, 1],
+      resetFocal: { type: 'action', label: 'Reset focal to EXIF' },
+      opacity: [DEFAULT_OPACITY_THRESHOLD, 0, 1, 0.01],
+      maxGaussians: [DEFAULT_MAX_GAUSSIANS, 1000, 10_000_000, 1000],
       generate: { type: 'action', label: 'Generate splat' },
       download: { type: 'action', label: 'Download .ply' },
       copyEmbed: { type: 'action', label: 'Copy embed' },
-      opacity: [DEFAULT_OPACITY_THRESHOLD, 0, 1, 0.01],
-      maxGaussians: [DEFAULT_MAX_GAUSSIANS, 1000, 10_000_000, 1000],
-      focal: [0, 0, 8000, 1],
-      resetFocal: { type: 'action', label: 'Reset focal to EXIF' },
-      renderer: { type: 'select', options: ['mkkellogg', 'aholo'], default: 'mkkellogg' },
     },
     { onAction: runAction },
   )
@@ -127,32 +131,22 @@ function App() {
   const viewer = useDialKitController(
     'Viewer',
     {
+      renderer: { type: 'select', options: ['mkkellogg', 'aholo'], default: 'mkkellogg' },
       bg: { type: 'color', default: DEFAULT_BG_COLOR },
       fov: [DEFAULT_FOV, 20, 120, 1],
       maxScreenSize: [DEFAULT_MAX_SCREEN_SIZE, 256, 4096, 1],
       autoRotate: DEFAULT_AUTO_ROTATE as boolean,
-      position: { x: [0, -5, 5, 0.01], y: [0, -5, 5, 0.01], z: [0, -5, 5, 0.01] },
-      rotation: { x: [0, -180, 180, 1], y: [180, -180, 180, 1], z: [0, -180, 180, 1] },
-      flip: { x: true as boolean, y: true as boolean, z: false as boolean },
-      resetTransform: { type: 'action', label: 'Reset transform' },
+      flipX: { type: 'action', label: 'Flip X' },
+      flipY: { type: 'action', label: 'Flip Y' },
+      flipZ: { type: 'action', label: 'Flip Z' },
+      resetFlip: { type: 'action', label: 'Reset flip' },
       saveDefaults: { type: 'action', label: 'Save as defaults' },
     },
     { onAction: runAction },
   )
 
-  const renderer = sharp.values.renderer as RendererChoice
+  const renderer = viewer.values.renderer as RendererChoice
   const focalPx = sharp.values.focal
-  const splatPosition: [number, number, number] = [
-    viewer.values.position.x,
-    viewer.values.position.y,
-    viewer.values.position.z,
-  ]
-  const splatRotation: [number, number, number] = [
-    viewer.values.rotation.x,
-    viewer.values.rotation.y,
-    viewer.values.rotation.z,
-  ]
-  const splatFlip: [boolean, boolean, boolean] = [viewer.values.flip.x, viewer.values.flip.y, viewer.values.flip.z]
 
   useEffect(() => {
     const worker = new SharpWorkerClient((message) => {
@@ -347,14 +341,14 @@ function App() {
         fov: meta?.fov ?? DEFAULT_FOV,
         maxScreenSize: meta?.maxScreenSize ?? DEFAULT_MAX_SCREEN_SIZE,
         autoRotate: meta?.autoRotate ?? DEFAULT_AUTO_ROTATE,
-        position: toXyz(meta?.splatPosition ?? DEFAULT_SPLAT_POSITION),
-        rotation: toXyz(meta?.splatRotation ?? DEFAULT_SPLAT_ROTATION),
-        flip: toFlipXyz(meta?.splatFlip ?? DEFAULT_SPLAT_FLIP),
       })
 
       startTransition(() => {
         setPlyBytes(bytes)
         setBakedMeta(meta)
+        setSplatPosition(meta?.splatPosition ?? DEFAULT_SPLAT_POSITION)
+        setSplatRotation(meta?.splatRotation ?? DEFAULT_SPLAT_ROTATION)
+        setSplatFlip(meta?.splatFlip ?? DEFAULT_SPLAT_FLIP)
         cameraSnapshotRef.current = null
         setSaveStatus(undefined)
         setResult((previous) => {
@@ -421,11 +415,9 @@ function App() {
   }
 
   const handleResetTransform = () => {
-    viewer.setValues({
-      position: toXyz(DEFAULT_SPLAT_POSITION),
-      rotation: toXyz(DEFAULT_SPLAT_ROTATION),
-      flip: toFlipXyz(DEFAULT_SPLAT_FLIP),
-    })
+    setSplatPosition(DEFAULT_SPLAT_POSITION)
+    setSplatRotation(DEFAULT_SPLAT_ROTATION)
+    setSplatFlip(DEFAULT_SPLAT_FLIP)
   }
 
   const triggerDownload = () => {
@@ -462,7 +454,10 @@ function App() {
     download: triggerDownload,
     copyEmbed: () => void copyEmbed(),
     resetFocal: () => selectedImage && sharp.setValue('focal', selectedImage.focalEstimate.focalPx),
-    resetTransform: handleResetTransform,
+    flipX: () => setSplatFlip((f) => [!f[0], f[1], f[2]]),
+    flipY: () => setSplatFlip((f) => [f[0], !f[1], f[2]]),
+    flipZ: () => setSplatFlip((f) => [f[0], f[1], !f[2]]),
+    resetFlip: handleResetTransform,
     saveDefaults: handleSaveDefaults,
   }
 
