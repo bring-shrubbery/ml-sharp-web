@@ -1,6 +1,7 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react'
 
 import './App.css'
+import { AholoSplatPreview } from './components/AholoSplatPreview'
 import { EmbedSnippet } from './components/EmbedSnippet'
 import { SplatPreview, type CameraSnapshot } from './components/SplatPreview'
 import { SplatPreviewControls } from './components/SplatPreviewControls'
@@ -15,6 +16,8 @@ const DEFAULT_BG_COLOR = '#101014'
 const DEFAULT_FOV = 60
 const DEFAULT_AUTO_ROTATE = false
 const DEFAULT_MAX_SCREEN_SIZE = 2048
+
+type RendererChoice = 'mkkellogg' | 'aholo'
 const DEFAULT_SPLAT_POSITION: [number, number, number] = [0, 0, 0]
 const DEFAULT_SPLAT_ROTATION: [number, number, number] = [0, 0, 0]
 const DEFAULT_SPLAT_FLIP: [boolean, boolean, boolean] = [false, false, false]
@@ -94,6 +97,7 @@ function App() {
   const [splatPosition, setSplatPosition] = useState<[number, number, number]>(DEFAULT_SPLAT_POSITION)
   const [splatRotation, setSplatRotation] = useState<[number, number, number]>(DEFAULT_SPLAT_ROTATION)
   const [splatFlip, setSplatFlip] = useState<[boolean, boolean, boolean]>(DEFAULT_SPLAT_FLIP)
+  const [renderer, setRenderer] = useState<RendererChoice>('mkkellogg')
   const [bakedMeta, setBakedMeta] = useState<SharpViewerMeta | null>(null)
   const [saveStatus, setSaveStatus] = useState<string | undefined>(undefined)
   const cameraSnapshotRef = useRef<CameraSnapshot | null>(null)
@@ -404,6 +408,29 @@ function App() {
     }
   }
 
+  const previewControls = result ? (
+    <SplatPreviewControls
+      bgColor={bgColor}
+      onBgColor={setBgColor}
+      fov={fov}
+      onFov={setFov}
+      maxScreenSize={maxScreenSize}
+      onMaxScreenSize={setMaxScreenSize}
+      autoRotate={autoRotate}
+      onAutoRotate={setAutoRotate}
+      splatPosition={splatPosition}
+      onSplatPosition={setSplatPosition}
+      splatRotation={splatRotation}
+      onSplatRotation={setSplatRotation}
+      splatFlip={splatFlip}
+      onSplatFlip={setSplatFlip}
+      onResetTransform={handleResetTransform}
+      onSaveDefaults={handleSaveDefaults}
+      saveDisabled={!plyBytes}
+      saveStatus={saveStatus}
+    />
+  ) : null
+
   return (
     <div className="app-shell">
       <main className="layout">
@@ -648,44 +675,64 @@ function App() {
           </div>
         </section>
 
-          <SplatPreview
-            plyUrl={result?.previewPlyUrl ?? null}
-            generationKey={generationKey}
-            initialCameraPosition={bakedMeta?.cameraPosition}
-            initialCameraTarget={bakedMeta?.cameraTarget}
-            initialCameraUp={bakedMeta?.cameraUp}
-            bgColor={bgColor}
-            fov={fov}
-            autoRotate={autoRotate}
-            maxScreenSize={maxScreenSize}
-            splatPosition={splatPosition}
-            splatRotation={splatRotation}
-            splatFlip={splatFlip}
-            onCameraChange={handleCameraChange}
-          >
-            {result ? (
-              <SplatPreviewControls
-                bgColor={bgColor}
-                onBgColor={setBgColor}
-                fov={fov}
-                onFov={setFov}
-                maxScreenSize={maxScreenSize}
-                onMaxScreenSize={setMaxScreenSize}
-                autoRotate={autoRotate}
-                onAutoRotate={setAutoRotate}
-                splatPosition={splatPosition}
-                onSplatPosition={setSplatPosition}
-                splatRotation={splatRotation}
-                onSplatRotation={setSplatRotation}
-                splatFlip={splatFlip}
-                onSplatFlip={setSplatFlip}
-                onResetTransform={handleResetTransform}
-                onSaveDefaults={handleSaveDefaults}
-                saveDisabled={!plyBytes}
-                saveStatus={saveStatus}
-              />
-            ) : null}
-          </SplatPreview>
+          <div className="renderer-toggle" role="group" aria-label="Renderer">
+            <span className="renderer-toggle-label">Renderer</span>
+            <div className="renderer-toggle-options">
+              <button
+                type="button"
+                className={`renderer-toggle-btn ${renderer === 'mkkellogg' ? 'is-active' : ''}`}
+                onClick={() => setRenderer('mkkellogg')}
+                aria-pressed={renderer === 'mkkellogg'}
+              >
+                mkkellogg
+              </button>
+              <button
+                type="button"
+                className={`renderer-toggle-btn ${renderer === 'aholo' ? 'is-active' : ''}`}
+                onClick={() => setRenderer('aholo')}
+                aria-pressed={renderer === 'aholo'}
+              >
+                Aholo
+              </button>
+            </div>
+          </div>
+
+          {renderer === 'aholo' ? (
+            <AholoSplatPreview
+              plyUrl={result?.previewPlyUrl ?? null}
+              generationKey={generationKey}
+              initialCameraPosition={bakedMeta?.cameraPosition}
+              initialCameraTarget={bakedMeta?.cameraTarget}
+              initialCameraUp={bakedMeta?.cameraUp}
+              bgColor={bgColor}
+              fov={fov}
+              autoRotate={autoRotate}
+              splatPosition={splatPosition}
+              splatRotation={splatRotation}
+              splatFlip={splatFlip}
+              onCameraChange={handleCameraChange}
+            >
+              {previewControls}
+            </AholoSplatPreview>
+          ) : (
+            <SplatPreview
+              plyUrl={result?.previewPlyUrl ?? null}
+              generationKey={generationKey}
+              initialCameraPosition={bakedMeta?.cameraPosition}
+              initialCameraTarget={bakedMeta?.cameraTarget}
+              initialCameraUp={bakedMeta?.cameraUp}
+              bgColor={bgColor}
+              fov={fov}
+              autoRotate={autoRotate}
+              maxScreenSize={maxScreenSize}
+              splatPosition={splatPosition}
+              splatRotation={splatRotation}
+              splatFlip={splatFlip}
+              onCameraChange={handleCameraChange}
+            >
+              {previewControls}
+            </SplatPreview>
+          )}
         </div>
       </main>
 
