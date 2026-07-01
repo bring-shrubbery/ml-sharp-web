@@ -108,25 +108,34 @@ function App() {
     actionsRef.current[action]?.()
   }, [])
 
-  // A single panel: generation workflow at the top (ordered by execution —
-  // load a model, upload an image, set focal, tune params, then generate and
-  // export), with the viewer/tuning controls in a nested folder that starts
-  // collapsed (`_collapsed`). DialKit only supports collapsing nested folders,
-  // not sibling panels, which is why these live under one controller.
+  // A single panel whose controls are grouped into labelled folders that follow
+  // the workflow: Model → Image → Generation → Export → Viewer. The viewer
+  // folder starts collapsed (`_collapsed`); DialKit only supports collapsing
+  // nested folders, not sibling panels, which is why everything lives under one
+  // controller. Folder nesting means control/action paths are dot-prefixed
+  // (e.g. `image.focal`, `generation.generate`).
   const controls = useDialKitController(
     'SHARP',
     {
-      loadModel: { type: 'action', label: 'Load model' },
-      uploadModel: { type: 'action', label: 'Upload .onnx' },
-      resetModel: { type: 'action', label: 'Reset model' },
-      uploadImage: { type: 'action', label: 'Upload image' },
-      focal: [0, 0, 8000, 1],
-      resetFocal: { type: 'action', label: 'Reset focal to EXIF' },
-      opacity: [DEFAULT_OPACITY_THRESHOLD, 0, 1, 0.01],
-      maxGaussians: [DEFAULT_MAX_GAUSSIANS, 1000, 10_000_000, 1000],
-      generate: { type: 'action', label: 'Generate splat' },
-      download: { type: 'action', label: 'Download .ply' },
-      copyEmbed: { type: 'action', label: 'Copy embed' },
+      model: {
+        loadModel: { type: 'action', label: 'Load model' },
+        uploadModel: { type: 'action', label: 'Upload .onnx' },
+        resetModel: { type: 'action', label: 'Reset model' },
+      },
+      image: {
+        uploadImage: { type: 'action', label: 'Upload image' },
+        focal: [0, 0, 8000, 1],
+        resetFocal: { type: 'action', label: 'Reset focal to EXIF' },
+      },
+      generation: {
+        opacity: [DEFAULT_OPACITY_THRESHOLD, 0, 1, 0.01],
+        maxGaussians: [DEFAULT_MAX_GAUSSIANS, 1000, 10_000_000, 1000],
+        generate: { type: 'action', label: 'Generate splat' },
+      },
+      export: {
+        download: { type: 'action', label: 'Download .ply' },
+        copyEmbed: { type: 'action', label: 'Copy embed' },
+      },
       viewer: {
         _collapsed: true,
         renderer: { type: 'select', options: ['mkkellogg', 'aholo'], default: 'mkkellogg' },
@@ -145,7 +154,7 @@ function App() {
   )
 
   const renderer = controls.values.viewer.renderer as RendererChoice
-  const focalPx = controls.values.focal
+  const focalPx = controls.values.image.focal
 
   useEffect(() => {
     const worker = new SharpWorkerClient((message) => {
@@ -274,7 +283,7 @@ function App() {
         if (previous) URL.revokeObjectURL(previous.previewUrl)
         return { file, previewUrl: previewUrl as string, width: info.width, height: info.height, focalEstimate }
       })
-      controls.setValue('focal', focalEstimate.focalPx)
+      controls.setValue('image.focal', focalEstimate.focalPx)
       setStatusText('Image ready. Configure settings and generate the splat.')
       setResult((previous) => {
         if (previous) {
@@ -325,8 +334,8 @@ function App() {
         imageHeight: height,
         focalPx,
         disparityFactor: focalPx / width,
-        opacityThreshold: controls.values.opacity,
-        maxGaussians: controls.values.maxGaussians,
+        opacityThreshold: controls.values.generation.opacity,
+        maxGaussians: controls.values.generation.maxGaussians,
       })
 
       const bytes = new Uint8Array(inference.plyBuffer as ArrayBuffer)
@@ -447,14 +456,14 @@ function App() {
   // Reassigned each render so the DialKit action dispatcher always calls the
   // latest handlers (which close over current state).
   actionsRef.current = {
-    uploadImage: () => imageInputRef.current?.click(),
-    loadModel: () => void handleLoadModel(),
-    uploadModel: () => modelInputRef.current?.click(),
-    resetModel: handleResetModel,
-    generate: () => void runGeneration(),
-    download: triggerDownload,
-    copyEmbed: () => void copyEmbed(),
-    resetFocal: () => selectedImage && controls.setValue('focal', selectedImage.focalEstimate.focalPx),
+    'model.loadModel': () => void handleLoadModel(),
+    'model.uploadModel': () => modelInputRef.current?.click(),
+    'model.resetModel': handleResetModel,
+    'image.uploadImage': () => imageInputRef.current?.click(),
+    'image.resetFocal': () => selectedImage && controls.setValue('image.focal', selectedImage.focalEstimate.focalPx),
+    'generation.generate': () => void runGeneration(),
+    'export.download': triggerDownload,
+    'export.copyEmbed': () => void copyEmbed(),
     'viewer.flipX': () => setSplatFlip((f) => [!f[0], f[1], f[2]]),
     'viewer.flipY': () => setSplatFlip((f) => [f[0], !f[1], f[2]]),
     'viewer.flipZ': () => setSplatFlip((f) => [f[0], f[1], !f[2]]),
