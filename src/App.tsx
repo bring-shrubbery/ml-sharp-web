@@ -1,11 +1,11 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react'
+import { DialRoot, useDialKitController } from 'dialkit'
 
 import './App.css'
 import { AholoSplatPreview } from './components/AholoSplatPreview'
-import { EmbedSnippet } from './components/EmbedSnippet'
 import { SplatPreview, type CameraSnapshot } from './components/SplatPreview'
-import { SplatPreviewControls } from './components/SplatPreviewControls'
 import { estimateFocalLengthFromFile, type FocalEstimate } from './lib/focal'
+import { EMBED_SNIPPET } from './lib/embed'
 import { imageFileToSharpTensor, readImageInfo } from './lib/image'
 import { readSharpViewerMeta, writeSharpViewerMeta, type SharpViewerMeta } from '@ml-sharp-web/ply-metadata'
 import { DEFAULT_MAX_GAUSSIANS, DEFAULT_OPACITY_THRESHOLD, DEFAULT_WEB_MODEL_URL } from './lib/sharpConstants'
@@ -16,14 +16,14 @@ const DEFAULT_BG_COLOR = '#101014'
 const DEFAULT_FOV = 60
 const DEFAULT_AUTO_ROTATE = false
 const DEFAULT_MAX_SCREEN_SIZE = 2048
-
-type RendererChoice = 'mkkellogg' | 'aholo'
 const DEFAULT_SPLAT_POSITION: [number, number, number] = [0, 0, 0]
 // SHARP's raw output is mirrored and back-to-front, so the model-correct
 // orientation is: flip X, flip Y, then 180° about the vertical (Y) axis.
 // Transforms compose scale-then-rotate, so this is flip [X,Y] + rotate Y 180°.
 const DEFAULT_SPLAT_ROTATION: [number, number, number] = [0, 180, 0]
 const DEFAULT_SPLAT_FLIP: [boolean, boolean, boolean] = [true, true, false]
+
+type RendererChoice = 'mkkellogg' | 'aholo'
 
 interface SelectedImage {
   file: File
@@ -68,16 +68,20 @@ function toOutputName(fileName: string): string {
   return `${stem}.ply`
 }
 
+type Xyz = { x: number; y: number; z: number }
+const toXyz = (t: [number, number, number]): Xyz => ({ x: t[0], y: t[1], z: t[2] })
+const toFlipXyz = (t: [boolean, boolean, boolean]) => ({ x: t[0], y: t[1], z: t[2] })
+
 function App() {
   const workerRef = useRef<SharpWorkerClient | null>(null)
+  const imageInputRef = useRef<HTMLInputElement | null>(null)
+  const modelInputRef = useRef<HTMLInputElement | null>(null)
+  const actionsRef = useRef<Record<string, () => void>>({})
+
   const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null)
-  const [manualFocalPx, setManualFocalPx] = useState<number | null>(null)
 
   const [modelFile, setModelFile] = useState<File | null>(null)
   const [modelFileUrl, setModelFileUrl] = useState<string | null>(null)
-
-  const [opacityThreshold, setOpacityThreshold] = useState(DEFAULT_OPACITY_THRESHOLD)
-  const [maxGaussians, setMaxGaussians] = useState(DEFAULT_MAX_GAUSSIANS)
 
   const [isBusy, setIsBusy] = useState(false)
   const [statusText, setStatusText] = useState<string>('Load the model to begin.')
@@ -93,17 +97,62 @@ function App() {
   const [loadElapsedSec, setLoadElapsedSec] = useState(0)
   const loadedModelUrlRef = useRef<string | null>(null)
 
-  const [bgColor, setBgColor] = useState<string>(DEFAULT_BG_COLOR)
-  const [fov, setFov] = useState<number>(DEFAULT_FOV)
-  const [autoRotate, setAutoRotate] = useState<boolean>(DEFAULT_AUTO_ROTATE)
-  const [maxScreenSize, setMaxScreenSize] = useState<number>(DEFAULT_MAX_SCREEN_SIZE)
-  const [splatPosition, setSplatPosition] = useState<[number, number, number]>(DEFAULT_SPLAT_POSITION)
-  const [splatRotation, setSplatRotation] = useState<[number, number, number]>(DEFAULT_SPLAT_ROTATION)
-  const [splatFlip, setSplatFlip] = useState<[boolean, boolean, boolean]>(DEFAULT_SPLAT_FLIP)
-  const [renderer, setRenderer] = useState<RendererChoice>('mkkellogg')
   const [bakedMeta, setBakedMeta] = useState<SharpViewerMeta | null>(null)
   const [saveStatus, setSaveStatus] = useState<string | undefined>(undefined)
   const cameraSnapshotRef = useRef<CameraSnapshot | null>(null)
+
+  const runAction = useCallback((action: string) => {
+    actionsRef.current[action]?.()
+  }, [])
+
+  const sharp = useDialKitController(
+    'SHARP',
+    {
+      uploadImage: { type: 'action', label: 'Upload image' },
+      loadModel: { type: 'action', label: 'Load model' },
+      uploadModel: { type: 'action', label: 'Upload .onnx' },
+      resetModel: { type: 'action', label: 'Reset model' },
+      generate: { type: 'action', label: 'Generate splat' },
+      download: { type: 'action', label: 'Download .ply' },
+      copyEmbed: { type: 'action', label: 'Copy embed' },
+      opacity: [DEFAULT_OPACITY_THRESHOLD, 0, 1, 0.01],
+      maxGaussians: [DEFAULT_MAX_GAUSSIANS, 1000, 10_000_000, 1000],
+      focal: [0, 0, 8000, 1],
+      resetFocal: { type: 'action', label: 'Reset focal to EXIF' },
+      renderer: { type: 'select', options: ['mkkellogg', 'aholo'], default: 'mkkellogg' },
+    },
+    { onAction: runAction },
+  )
+
+  const viewer = useDialKitController(
+    'Viewer',
+    {
+      bg: { type: 'color', default: DEFAULT_BG_COLOR },
+      fov: [DEFAULT_FOV, 20, 120, 1],
+      maxScreenSize: [DEFAULT_MAX_SCREEN_SIZE, 256, 4096, 1],
+      autoRotate: DEFAULT_AUTO_ROTATE as boolean,
+      position: { x: [0, -5, 5, 0.01], y: [0, -5, 5, 0.01], z: [0, -5, 5, 0.01] },
+      rotation: { x: [0, -180, 180, 1], y: [180, -180, 180, 1], z: [0, -180, 180, 1] },
+      flip: { x: true as boolean, y: true as boolean, z: false as boolean },
+      resetTransform: { type: 'action', label: 'Reset transform' },
+      saveDefaults: { type: 'action', label: 'Save as defaults' },
+    },
+    { onAction: runAction },
+  )
+
+  const renderer = sharp.values.renderer as RendererChoice
+  const focalPx = sharp.values.focal
+  const splatPosition: [number, number, number] = [
+    viewer.values.position.x,
+    viewer.values.position.y,
+    viewer.values.position.z,
+  ]
+  const splatRotation: [number, number, number] = [
+    viewer.values.rotation.x,
+    viewer.values.rotation.y,
+    viewer.values.rotation.z,
+  ]
+  const splatFlip: [boolean, boolean, boolean] = [viewer.values.flip.x, viewer.values.flip.y, viewer.values.flip.z]
 
   useEffect(() => {
     const worker = new SharpWorkerClient((message) => {
@@ -141,9 +190,7 @@ function App() {
 
   useEffect(() => {
     return () => {
-      if (selectedImage) {
-        URL.revokeObjectURL(selectedImage.previewUrl)
-      }
+      if (selectedImage) URL.revokeObjectURL(selectedImage.previewUrl)
       if (result) {
         URL.revokeObjectURL(result.previewPlyUrl)
         if (result.downloadPlyUrl !== result.previewPlyUrl) {
@@ -154,13 +201,8 @@ function App() {
   }, [selectedImage, result])
 
   const effectiveModelUrl = modelFileUrl ?? DEFAULT_WEB_MODEL_URL
-  const focalPx = manualFocalPx ?? selectedImage?.focalEstimate.focalPx ?? 0
 
   const modelLoaded = modelLoadState === 'loaded' && loadedModelUrlRef.current === effectiveModelUrl
-  const canLoadModel = Boolean(effectiveModelUrl) && modelLoadState !== 'loading'
-  const canGenerate = Boolean(
-    selectedImage && effectiveModelUrl && focalPx > 0 && !isBusy && modelLoaded,
-  )
 
   useEffect(() => {
     if (loadedModelUrlRef.current && loadedModelUrlRef.current !== effectiveModelUrl) {
@@ -183,8 +225,8 @@ function App() {
     return () => window.clearInterval(interval)
   }, [modelLoadState])
 
-  const handleLoadModel = useCallback(async () => {
-    if (!workerRef.current || !effectiveModelUrl) return
+  const handleLoadModel = async () => {
+    if (!workerRef.current || !effectiveModelUrl || modelLoadState === 'loading') return
     setModelLoadState('loading')
     setErrorText(null)
     setStatusText('Starting model download…')
@@ -202,12 +244,13 @@ function App() {
       setStatusText('Model load failed.')
       setWorkerStage('idle')
     }
-  }, [effectiveModelUrl])
+  }
 
-  const handleResetModel = useCallback(() => {
-    const message = modelLoadState === 'loading'
-      ? 'Cancel the model load? The current download will be aborted.'
-      : 'Reset the model? This will clear the loaded session and any uploaded file. You will need to load again to generate.'
+  const handleResetModel = () => {
+    const message =
+      modelLoadState === 'loading'
+        ? 'Cancel the model load? The current download will be aborted.'
+        : 'Reset the model? This will clear the loaded session and any uploaded file.'
     if (!window.confirm(message)) return
     workerRef.current?.reset()
     setModelFile(null)
@@ -217,80 +260,18 @@ function App() {
     setWorkerStage('idle')
     setWorkerProgress(undefined)
     setErrorText(null)
-  }, [modelLoadState])
-
-  const resultRatio =
-    result && result.totalGaussians > 0 ? (100 * result.selectedGaussians) / result.totalGaussians : 0
-  const resultSummary = result
-    ? `${result.selectedGaussians.toLocaleString()} / ${result.totalGaussians.toLocaleString()} gaussians (${resultRatio.toFixed(1)}%) • ${formatBytes(result.fileSizeBytes)}`
-    : null
+  }
 
   const handleCameraChange = useCallback((snap: CameraSnapshot) => {
     cameraSnapshotRef.current = snap
   }, [])
 
-  const handleSaveDefaults = useCallback(() => {
-    if (!plyBytes) return
-    const camera = cameraSnapshotRef.current
-    const meta: SharpViewerMeta = {
-      ...(camera ? { cameraPosition: camera.position, cameraTarget: camera.target, cameraUp: camera.up } : {}),
-      bgColor,
-      fov,
-      autoRotate,
-      maxScreenSize,
-      ...(splatPosition.some((n) => n !== 0) ? { splatPosition } : {}),
-      ...(splatRotation.some((n) => n !== 0) ? { splatRotation } : {}),
-      ...(splatFlip.some(Boolean) ? { splatFlip } : {}),
-    }
-    let nextBytes: Uint8Array
-    try {
-      nextBytes = writeSharpViewerMeta(plyBytes, meta)
-    } catch (error) {
-      setSaveStatus(`Save failed: ${error instanceof Error ? error.message : String(error)}`)
-      return
-    }
-    setPlyBytes(nextBytes)
-    setBakedMeta(meta)
-    const blob = new Blob([nextBytes as BlobPart], { type: 'application/octet-stream' })
-    const url = URL.createObjectURL(blob)
-    setResult((previous) => {
-      if (!previous) return previous
-      if (previous.downloadPlyUrl !== previous.previewPlyUrl) {
-        URL.revokeObjectURL(previous.downloadPlyUrl)
-      }
-      return { ...previous, downloadPlyUrl: url, fileSizeBytes: blob.size }
-    })
-    setSaveStatus('Baked into download')
-    window.setTimeout(() => setSaveStatus(undefined), 2000)
-  }, [plyBytes, bgColor, fov, autoRotate, maxScreenSize, splatPosition, splatRotation, splatFlip])
-
-  const handleResetTransform = useCallback(() => {
-    setSplatPosition(DEFAULT_SPLAT_POSITION)
-    setSplatRotation(DEFAULT_SPLAT_ROTATION)
-    setSplatFlip(DEFAULT_SPLAT_FLIP)
-  }, [])
-
   const handleImageSelection = async (file: File | null) => {
-    if (!file) {
-      setSelectedImage((previous) => {
-        if (previous) URL.revokeObjectURL(previous.previewUrl)
-        return null
-      })
-      setManualFocalPx(null)
-      setResult((previous) => {
-        if (previous) { URL.revokeObjectURL(previous.previewPlyUrl); if (previous.downloadPlyUrl !== previous.previewPlyUrl) URL.revokeObjectURL(previous.downloadPlyUrl) }
-        return null
-      })
-      setStatusText('Upload an image to begin.')
-      setErrorText(null)
-      return
-    }
-
+    if (!file) return
     setErrorText(null)
     setStatusText('Reading image metadata…')
 
     let previewUrl: string | null = null
-
     try {
       previewUrl = URL.createObjectURL(file)
       const info = await readImageInfo(file)
@@ -298,41 +279,38 @@ function App() {
 
       setSelectedImage((previous) => {
         if (previous) URL.revokeObjectURL(previous.previewUrl)
-        const nextPreviewUrl = previewUrl as string
-        return {
-          file,
-          previewUrl: nextPreviewUrl,
-          width: info.width,
-          height: info.height,
-          focalEstimate,
-        }
+        return { file, previewUrl: previewUrl as string, width: info.width, height: info.height, focalEstimate }
       })
-      setManualFocalPx(focalEstimate.focalPx)
+      sharp.setValue('focal', focalEstimate.focalPx)
       setStatusText('Image ready. Configure settings and generate the splat.')
       setResult((previous) => {
-        if (previous) { URL.revokeObjectURL(previous.previewPlyUrl); if (previous.downloadPlyUrl !== previous.previewPlyUrl) URL.revokeObjectURL(previous.downloadPlyUrl) }
+        if (previous) {
+          URL.revokeObjectURL(previous.previewPlyUrl)
+          if (previous.downloadPlyUrl !== previous.previewPlyUrl) URL.revokeObjectURL(previous.downloadPlyUrl)
+        }
         return null
       })
       setGenerationKey((key) => key + 1)
     } catch (error) {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl)
-      }
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
       setErrorText(error instanceof Error ? error.message : String(error))
       setStatusText('Failed to read image.')
     }
   }
 
   const runGeneration = async () => {
-    if (!selectedImage || !workerRef.current) {
+    if (!selectedImage) {
+      setErrorText('Upload an image before generating.')
       return
     }
-
-    if (!effectiveModelUrl) {
-      setErrorText('No in-browser model source is available. Upload an ONNX predictor file or configure the hosted model URL.')
+    if (!workerRef.current || !effectiveModelUrl) {
+      setErrorText('No in-browser model source is available. Upload an ONNX predictor or load the hosted model.')
       return
     }
-
+    if (!modelLoaded) {
+      setErrorText('Load the model before generating.')
+      return
+    }
     if (!Number.isFinite(focalPx) || focalPx <= 0) {
       setErrorText('Focal length must be a positive number.')
       return
@@ -341,7 +319,6 @@ function App() {
     setErrorText(null)
     setIsBusy(true)
     setStatusText('Preparing image tensor…')
-
     const startTime = performance.now()
 
     try {
@@ -355,39 +332,35 @@ function App() {
         imageHeight: height,
         focalPx,
         disparityFactor: focalPx / width,
-        opacityThreshold,
-        maxGaussians,
+        opacityThreshold: sharp.values.opacity,
+        maxGaussians: sharp.values.maxGaussians,
       })
 
       const bytes = new Uint8Array(inference.plyBuffer as ArrayBuffer)
       const blob = new Blob([bytes as BlobPart], { type: 'application/octet-stream' })
       const plyUrl = URL.createObjectURL(blob)
       const elapsedMs = performance.now() - startTime
-
       const meta = readSharpViewerMeta(bytes)
+
+      viewer.setValues({
+        bg: meta?.bgColor ?? DEFAULT_BG_COLOR,
+        fov: meta?.fov ?? DEFAULT_FOV,
+        maxScreenSize: meta?.maxScreenSize ?? DEFAULT_MAX_SCREEN_SIZE,
+        autoRotate: meta?.autoRotate ?? DEFAULT_AUTO_ROTATE,
+        position: toXyz(meta?.splatPosition ?? DEFAULT_SPLAT_POSITION),
+        rotation: toXyz(meta?.splatRotation ?? DEFAULT_SPLAT_ROTATION),
+        flip: toFlipXyz(meta?.splatFlip ?? DEFAULT_SPLAT_FLIP),
+      })
 
       startTransition(() => {
         setPlyBytes(bytes)
         setBakedMeta(meta)
-        if (meta?.bgColor) setBgColor(meta.bgColor)
-        else setBgColor(DEFAULT_BG_COLOR)
-        if (meta?.fov !== undefined) setFov(meta.fov)
-        else setFov(DEFAULT_FOV)
-        if (meta?.autoRotate !== undefined) setAutoRotate(meta.autoRotate)
-        else setAutoRotate(DEFAULT_AUTO_ROTATE)
-        if (meta?.maxScreenSize !== undefined) setMaxScreenSize(meta.maxScreenSize)
-        else setMaxScreenSize(DEFAULT_MAX_SCREEN_SIZE)
-        setSplatPosition(meta?.splatPosition ?? DEFAULT_SPLAT_POSITION)
-        setSplatRotation(meta?.splatRotation ?? DEFAULT_SPLAT_ROTATION)
-        setSplatFlip(meta?.splatFlip ?? DEFAULT_SPLAT_FLIP)
         cameraSnapshotRef.current = null
         setSaveStatus(undefined)
         setResult((previous) => {
           if (previous) {
             URL.revokeObjectURL(previous.previewPlyUrl)
-            if (previous.downloadPlyUrl !== previous.previewPlyUrl) {
-              URL.revokeObjectURL(previous.downloadPlyUrl)
-            }
+            if (previous.downloadPlyUrl !== previous.previewPlyUrl) URL.revokeObjectURL(previous.downloadPlyUrl)
           }
           return {
             previewPlyUrl: plyUrl,
@@ -411,352 +384,200 @@ function App() {
     }
   }
 
-  const previewControls = result ? (
-    <SplatPreviewControls
-      bgColor={bgColor}
-      onBgColor={setBgColor}
-      fov={fov}
-      onFov={setFov}
-      maxScreenSize={maxScreenSize}
-      onMaxScreenSize={setMaxScreenSize}
-      autoRotate={autoRotate}
-      onAutoRotate={setAutoRotate}
-      splatPosition={splatPosition}
-      onSplatPosition={setSplatPosition}
-      splatRotation={splatRotation}
-      onSplatRotation={setSplatRotation}
-      splatFlip={splatFlip}
-      onSplatFlip={setSplatFlip}
-      onResetTransform={handleResetTransform}
-      onSaveDefaults={handleSaveDefaults}
-      saveDisabled={!plyBytes}
-      saveStatus={saveStatus}
-    />
-  ) : null
+  const handleSaveDefaults = () => {
+    if (!plyBytes) {
+      setSaveStatus('Generate a splat first.')
+      return
+    }
+    const camera = cameraSnapshotRef.current
+    const meta: SharpViewerMeta = {
+      ...(camera ? { cameraPosition: camera.position, cameraTarget: camera.target, cameraUp: camera.up } : {}),
+      bgColor: viewer.values.bg,
+      fov: viewer.values.fov,
+      autoRotate: viewer.values.autoRotate,
+      maxScreenSize: viewer.values.maxScreenSize,
+      ...(splatPosition.some((n) => n !== 0) ? { splatPosition } : {}),
+      ...(splatRotation.some((n) => n !== 0) ? { splatRotation } : {}),
+      ...(splatFlip.some(Boolean) ? { splatFlip } : {}),
+    }
+    let nextBytes: Uint8Array
+    try {
+      nextBytes = writeSharpViewerMeta(plyBytes, meta)
+    } catch (error) {
+      setSaveStatus(`Save failed: ${error instanceof Error ? error.message : String(error)}`)
+      return
+    }
+    setPlyBytes(nextBytes)
+    setBakedMeta(meta)
+    const blob = new Blob([nextBytes as BlobPart], { type: 'application/octet-stream' })
+    const url = URL.createObjectURL(blob)
+    setResult((previous) => {
+      if (!previous) return previous
+      if (previous.downloadPlyUrl !== previous.previewPlyUrl) URL.revokeObjectURL(previous.downloadPlyUrl)
+      return { ...previous, downloadPlyUrl: url, fileSizeBytes: blob.size }
+    })
+    setSaveStatus('Baked into download')
+    window.setTimeout(() => setSaveStatus(undefined), 2000)
+  }
+
+  const handleResetTransform = () => {
+    viewer.setValues({
+      position: toXyz(DEFAULT_SPLAT_POSITION),
+      rotation: toXyz(DEFAULT_SPLAT_ROTATION),
+      flip: toFlipXyz(DEFAULT_SPLAT_FLIP),
+    })
+  }
+
+  const triggerDownload = () => {
+    if (!result) {
+      setErrorText('Generate a splat before downloading.')
+      return
+    }
+    const anchor = document.createElement('a')
+    anchor.href = result.downloadPlyUrl
+    anchor.download = result.downloadName
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  }
+
+  const copyEmbed = async () => {
+    try {
+      await navigator.clipboard.writeText(EMBED_SNIPPET)
+      setSaveStatus('Embed snippet copied')
+      window.setTimeout(() => setSaveStatus(undefined), 2000)
+    } catch {
+      setSaveStatus('Copy failed — clipboard blocked')
+    }
+  }
+
+  // Reassigned each render so the DialKit action dispatcher always calls the
+  // latest handlers (which close over current state).
+  actionsRef.current = {
+    uploadImage: () => imageInputRef.current?.click(),
+    loadModel: () => void handleLoadModel(),
+    uploadModel: () => modelInputRef.current?.click(),
+    resetModel: handleResetModel,
+    generate: () => void runGeneration(),
+    download: triggerDownload,
+    copyEmbed: () => void copyEmbed(),
+    resetFocal: () => selectedImage && sharp.setValue('focal', selectedImage.focalEstimate.focalPx),
+    resetTransform: handleResetTransform,
+    saveDefaults: handleSaveDefaults,
+  }
+
+  const resultRatio =
+    result && result.totalGaussians > 0 ? (100 * result.selectedGaussians) / result.totalGaussians : 0
+  const resultSummary = result
+    ? `${result.selectedGaussians.toLocaleString()} / ${result.totalGaussians.toLocaleString()} gaussians (${resultRatio.toFixed(1)}%) • ${formatBytes(result.fileSizeBytes)}`
+    : null
+
+  const previewProps = {
+    plyUrl: result?.previewPlyUrl ?? null,
+    generationKey,
+    initialCameraPosition: bakedMeta?.cameraPosition,
+    initialCameraTarget: bakedMeta?.cameraTarget,
+    initialCameraUp: bakedMeta?.cameraUp,
+    bgColor: viewer.values.bg,
+    fov: viewer.values.fov,
+    autoRotate: viewer.values.autoRotate,
+    splatPosition,
+    splatRotation,
+    splatFlip,
+    onCameraChange: handleCameraChange,
+  }
+
+  const modelLoading = modelLoadState === 'loading'
+  const showProgress = workerProgress !== undefined && workerProgress < 1
 
   return (
-    <div className="app-shell">
-      <main className="layout">
-        <div className="col col-left">
-          <header className="hero panel">
-            <nav className="top-links" aria-label="External links">
-              <a
-                className="top-link"
-                href="https://x.com/bringshrubberyy"
-                target="_blank"
-                rel="noreferrer"
-                aria-label="X (Twitter)"
-                title="X (Twitter)"
-              >
-                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                </svg>
-              </a>
-              <a
-                className="top-link"
-                href="https://github.com/bring-shrubbery/ml-sharp-web"
-                target="_blank"
-                rel="noreferrer"
-                aria-label="GitHub repository"
-                title="GitHub repository"
-              >
-                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.16-.02-2.11-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.27-1.69-1.27-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.72-1.53-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.05 0 0 .97-.31 3.18 1.18.92-.26 1.91-.39 2.9-.39.99 0 1.98.13 2.9.39 2.21-1.49 3.18-1.18 3.18-1.18.62 1.59.23 2.76.11 3.05.74.81 1.18 1.84 1.18 3.1 0 4.42-2.7 5.39-5.27 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.79-.01 3.17 0 .31.21.68.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.73 18.27.5 12 .5z" />
-                </svg>
-              </a>
-            </nav>
-            <div>
-              <p className="eyebrow">SHARP in the Browser (experimental)</p>
-              <h1>Single-image to Gaussian splats, fully client-side</h1>
-              <p className="hero-copy">
-                Upload an image, run an exported SHARP ONNX predictor in the browser, preview the generated splat,
-                and download a `.ply` file. Everything runs in the browser.
-              </p>
-            </div>
-          </header>
-          <section className="panel controls-panel">
-          <h2>Inputs</h2>
+    <div className="stage">
+      {renderer === 'aholo' ? (
+        <AholoSplatPreview {...previewProps} />
+      ) : (
+        <SplatPreview {...previewProps} maxScreenSize={viewer.values.maxScreenSize} />
+      )}
 
-          <div className="model-loader" data-state={modelLoadState}>
-            <span className="model-loader-label">Model</span>
-            {modelLoaded ? (
-              <div className="model-loader-row">
-                <span className="model-loader-status-loaded">
-                  ✓ {modelFile ? `Loaded ${modelFile.name}` : 'Loaded SHARP predictor'}
-                </span>
-                <button type="button" className="btn model-loader-reset" onClick={handleResetModel}>
-                  Reset
-                </button>
-              </div>
-            ) : modelLoadState === 'loading' ? (
-              <div className="model-loader-row">
-                <span className="model-loader-status-loading">
-                  <span className="model-loader-spinner" aria-hidden />
-                  Loading… {String(Math.floor(loadElapsedSec / 60)).padStart(2, '0')}:
-                  {String(loadElapsedSec % 60).padStart(2, '0')}
-                </span>
-                <button type="button" className="btn model-loader-reset" onClick={handleResetModel}>
-                  Cancel
-                </button>
-              </div>
-            ) : modelFile ? (
-              <div className="model-loader-row">
-                <button
-                  type="button"
-                  className="btn btn-primary model-loader-btn"
-                  onClick={() => void handleLoadModel()}
-                  disabled={!canLoadModel}
-                >
-                  Load uploaded model
-                </button>
-                <span className="model-loader-filename">{modelFile.name}</span>
-                <button type="button" className="btn model-loader-reset" onClick={handleResetModel}>
-                  Reset
-                </button>
-              </div>
-            ) : (
-              <div className="model-loader-row">
-                <button
-                  type="button"
-                  className="btn btn-primary model-loader-btn"
-                  onClick={() => void handleLoadModel()}
-                  disabled={!canLoadModel}
-                >
-                  {modelLoadState === 'error' ? 'Retry hosted load' : 'Load hosted model'}
-                </button>
-                <span className="model-loader-or">or</span>
-                <label className="btn model-loader-upload">
-                  Upload .onnx
-                  <input
-                    type="file"
-                    accept=".onnx,application/octet-stream"
-                    hidden
-                    onChange={(event) => setModelFile(event.currentTarget.files?.[0] ?? null)}
-                  />
-                </label>
-                {modelLoadState === 'error' ? (
-                  <button type="button" className="btn model-loader-reset" onClick={handleResetModel}>
-                    Reset
-                  </button>
-                ) : null}
-              </div>
-            )}
-            <small className="model-loader-hint">
-              {modelLoaded
-                ? 'Click Reset to switch models or upload your own.'
-                : modelLoadState === 'loading'
-                  ? 'Cancelling will terminate the worker mid-fetch.'
-                  : modelFile
-                    ? 'SHARP exports usually include a companion .onnx.data sidecar — uploaded .onnx files alone often will not work.'
-                    : 'Hosted SHARP predictor (~2.4 GB) — or upload your own ONNX export.'}
-            </small>
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0] ?? null
+          event.currentTarget.value = ''
+          void handleImageSelection(file)
+        }}
+      />
+      <input
+        ref={modelInputRef}
+        type="file"
+        accept=".onnx,application/octet-stream"
+        hidden
+        onChange={(event) => {
+          setModelFile(event.currentTarget.files?.[0] ?? null)
+          event.currentTarget.value = ''
+        }}
+      />
+
+      <div className="overlays">
+        <div className="status-overlay" data-stage={workerStage}>
+          <div className="status-overlay-row">
+            <span className={`status-dot${isBusy || modelLoading ? ' is-busy' : ''}`} />
+            <span className="status-overlay-text">
+              {modelLoading
+                ? `Loading model ${String(Math.floor(loadElapsedSec / 60)).padStart(2, '0')}:${String(loadElapsedSec % 60).padStart(2, '0')}`
+                : statusText}
+            </span>
           </div>
-
-          <label className="field">
-            <span>Image</span>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) => {
-                const file = event.currentTarget.files?.[0] ?? null
-                void handleImageSelection(file)
-              }}
-            />
-          </label>
-
-          <div className="field-grid two-col">
-            <label className="field compact">
-              <span>Opacity threshold</span>
-              <input
-                type="number"
-                min={0}
-                max={1}
-                step={0.01}
-                value={opacityThreshold}
-                onChange={(event) => setOpacityThreshold(Number(event.currentTarget.value))}
-              />
-              <small>Prunes low-alpha splats before preview/export.</small>
-            </label>
-
-            <label className="field compact">
-              <span>Max gaussians</span>
-              <input
-                type="number"
-                min={1000}
-                step={1000}
-                value={maxGaussians}
-                onChange={(event) => setMaxGaussians(Math.max(1000, Math.floor(Number(event.currentTarget.value) || 1000)))}
-              />
-              <small>Caps output for browser memory/perf.</small>
-            </label>
-          </div>
-
-          <div className="field-grid two-col">
-            <label className="field compact">
-              <span>Focal length (px)</span>
-              <input
-                type="number"
-                min={1}
-                step={1}
-                value={Number.isFinite(focalPx) ? Math.round(focalPx) : ''}
-                onChange={(event) => {
-                  const next = Number(event.currentTarget.value)
-                  setManualFocalPx(Number.isFinite(next) && next > 0 ? next : null)
-                }}
-                disabled={!selectedImage}
-              />
-            </label>
-
-            <div className="field compact">
-              <span>Focal source</span>
-              <div className="meta-card">
-                {selectedImage ? sourceLabel(selectedImage.focalEstimate.source) : 'No image selected'}
-              </div>
-              <small>SHARP quality depends heavily on focal accuracy.</small>
-            </div>
-          </div>
-
-          <div className="actions">
-            <button type="button" className="btn btn-primary" onClick={() => void runGeneration()} disabled={!canGenerate}>
-              {isBusy ? 'Generating…' : 'Generate Splat'}
-            </button>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => selectedImage && setManualFocalPx(selectedImage.focalEstimate.focalPx)}
-              disabled={!selectedImage || isBusy}
+          {showProgress ? (
+            <div
+              className="progress-bar"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round((workerProgress ?? 0) * 100)}
             >
-              Reset Focal to EXIF/Default
-            </button>
-            <a
-              className={`btn ${result ? '' : 'btn-disabled'}`}
-              href={result?.downloadPlyUrl ?? undefined}
-              download={result?.downloadName ?? 'sharp-output.ply'}
-              aria-disabled={!result}
-              onClick={(event) => {
-                if (!result) event.preventDefault()
-              }}
-            >
-              Download `.ply`
-            </a>
-          </div>
-
-          <div className="status-card" data-stage={workerStage}>
-            <div className="status-row">
-              <span className="status-dot" />
-              <span>{statusText}</span>
+              <div className="progress-bar-fill" style={{ width: `${((workerProgress ?? 0) * 100).toFixed(1)}%` }} />
             </div>
-            {workerProgress !== undefined && workerProgress < 1 ? (
-              <div className="progress-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(workerProgress * 100)}>
-                <div className="progress-bar-fill" style={{ width: `${(workerProgress * 100).toFixed(1)}%` }} />
-              </div>
-            ) : null}
-            {errorText ? <p className="error-text">{errorText}</p> : null}
-            {resultSummary ? <p className="result-text">{resultSummary}</p> : null}
-          </div>
-
-          {result ? <EmbedSnippet /> : null}
-        </section>
+          ) : null}
+          {errorText ? <p className="status-overlay-error">{errorText}</p> : null}
+          {resultSummary ? <p className="status-overlay-summary">{resultSummary}</p> : null}
+          {saveStatus ? <p className="status-overlay-save">{saveStatus}</p> : null}
         </div>
 
-        <div className="col col-right">
-          <section className="panel image-panel">
-          <div className="panel-header">
-            <h2>Input Image</h2>
-            {selectedImage ? (
-              <span className="dim-label">
-                {selectedImage.width} × {selectedImage.height}
-              </span>
-            ) : null}
-          </div>
-          <div className="image-frame">
-            {selectedImage ? (
-              <img src={selectedImage.previewUrl} alt="Selected input" />
-            ) : (
-              <div className="empty-state">Select an image to see the preview.</div>
-            )}
-          </div>
-        </section>
+        {selectedImage ? (
+          <figure className="thumb-overlay">
+            <img src={selectedImage.previewUrl} alt="Input" />
+            <figcaption>
+              {selectedImage.width}×{selectedImage.height} · {sourceLabel(selectedImage.focalEstimate.source)}
+            </figcaption>
+          </figure>
+        ) : null}
 
-          <div className="renderer-toggle" role="group" aria-label="Renderer">
-            <span className="renderer-toggle-label">Renderer</span>
-            <div className="renderer-toggle-options">
-              <button
-                type="button"
-                className={`renderer-toggle-btn ${renderer === 'mkkellogg' ? 'is-active' : ''}`}
-                onClick={() => setRenderer('mkkellogg')}
-                aria-pressed={renderer === 'mkkellogg'}
-              >
-                mkkellogg
-              </button>
-              <button
-                type="button"
-                className={`renderer-toggle-btn ${renderer === 'aholo' ? 'is-active' : ''}`}
-                onClick={() => setRenderer('aholo')}
-                aria-pressed={renderer === 'aholo'}
-              >
-                Aholo
-              </button>
-            </div>
-          </div>
-
-          {renderer === 'aholo' ? (
-            <AholoSplatPreview
-              plyUrl={result?.previewPlyUrl ?? null}
-              generationKey={generationKey}
-              initialCameraPosition={bakedMeta?.cameraPosition}
-              initialCameraTarget={bakedMeta?.cameraTarget}
-              initialCameraUp={bakedMeta?.cameraUp}
-              bgColor={bgColor}
-              fov={fov}
-              autoRotate={autoRotate}
-              splatPosition={splatPosition}
-              splatRotation={splatRotation}
-              splatFlip={splatFlip}
-              onCameraChange={handleCameraChange}
-            >
-              {previewControls}
-            </AholoSplatPreview>
-          ) : (
-            <SplatPreview
-              plyUrl={result?.previewPlyUrl ?? null}
-              generationKey={generationKey}
-              initialCameraPosition={bakedMeta?.cameraPosition}
-              initialCameraTarget={bakedMeta?.cameraTarget}
-              initialCameraUp={bakedMeta?.cameraUp}
-              bgColor={bgColor}
-              fov={fov}
-              autoRotate={autoRotate}
-              maxScreenSize={maxScreenSize}
-              splatPosition={splatPosition}
-              splatRotation={splatRotation}
-              splatFlip={splatFlip}
-              onCameraChange={handleCameraChange}
-            >
-              {previewControls}
-            </SplatPreview>
-          )}
-        </div>
-      </main>
-
-      <footer className="footer-note">
-        <p>
-          License note: Apple&apos;s released SHARP model weights are subject to upstream research-use
-          restrictions. Please review{' '}
+        <div className="links-overlay">
+          <a href="https://x.com/bringshrubberyy" target="_blank" rel="noreferrer" aria-label="X (Twitter)" title="X (Twitter)">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+          </a>
+          <a href="https://github.com/bring-shrubbery/ml-sharp-web" target="_blank" rel="noreferrer" aria-label="GitHub repository" title="GitHub repository">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.16-.02-2.11-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.27-1.69-1.27-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.72-1.53-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.05 0 0 .97-.31 3.18 1.18.92-.26 1.91-.39 2.9-.39.99 0 1.98.13 2.9.39 2.21-1.49 3.18-1.18 3.18-1.18.62 1.59.23 2.76.11 3.05.74.81 1.18 1.84 1.18 3.1 0 4.42-2.7 5.39-5.27 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.79-.01 3.17 0 .31.21.68.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.73 18.27.5 12 .5z" />
+            </svg>
+          </a>
           <a
+            className="links-overlay-license"
             href="https://github.com/apple/ml-sharp/blob/main/LICENSE_MODEL"
             target="_blank"
             rel="noreferrer"
           >
-            LICENSE_MODEL
-          </a>{' '}
-          (and{' '}
-          <a href="https://github.com/apple/ml-sharp/blob/main/LICENSE" target="_blank" rel="noreferrer">
-            LICENSE
+            Model license
           </a>
-          ) before using the model files.
-        </p>
-      </footer>
+        </div>
+      </div>
+
+      <DialRoot mode="popover" theme="dark" position="top-right" productionEnabled defaultOpen />
     </div>
   )
 }
