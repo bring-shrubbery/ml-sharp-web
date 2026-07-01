@@ -108,9 +108,12 @@ function App() {
     actionsRef.current[action]?.()
   }, [])
 
-  // Controls are ordered to mirror the workflow: load a model, upload an image,
-  // set focal, tune generation params, then generate and export.
-  const sharp = useDialKitController(
+  // A single panel: generation workflow at the top (ordered by execution —
+  // load a model, upload an image, set focal, tune params, then generate and
+  // export), with the viewer/tuning controls in a nested folder that starts
+  // collapsed (`_collapsed`). DialKit only supports collapsing nested folders,
+  // not sibling panels, which is why these live under one controller.
+  const controls = useDialKitController(
     'SHARP',
     {
       loadModel: { type: 'action', label: 'Load model' },
@@ -124,29 +127,25 @@ function App() {
       generate: { type: 'action', label: 'Generate splat' },
       download: { type: 'action', label: 'Download .ply' },
       copyEmbed: { type: 'action', label: 'Copy embed' },
+      viewer: {
+        _collapsed: true,
+        renderer: { type: 'select', options: ['mkkellogg', 'aholo'], default: 'mkkellogg' },
+        bg: { type: 'color', default: DEFAULT_BG_COLOR },
+        fov: [DEFAULT_FOV, 20, 120, 1],
+        maxScreenSize: [DEFAULT_MAX_SCREEN_SIZE, 256, 4096, 1],
+        autoRotate: DEFAULT_AUTO_ROTATE as boolean,
+        flipX: { type: 'action', label: 'Flip X' },
+        flipY: { type: 'action', label: 'Flip Y' },
+        flipZ: { type: 'action', label: 'Flip Z' },
+        resetFlip: { type: 'action', label: 'Reset flip' },
+        saveDefaults: { type: 'action', label: 'Save as defaults' },
+      },
     },
     { onAction: runAction },
   )
 
-  const viewer = useDialKitController(
-    'Viewer',
-    {
-      renderer: { type: 'select', options: ['mkkellogg', 'aholo'], default: 'mkkellogg' },
-      bg: { type: 'color', default: DEFAULT_BG_COLOR },
-      fov: [DEFAULT_FOV, 20, 120, 1],
-      maxScreenSize: [DEFAULT_MAX_SCREEN_SIZE, 256, 4096, 1],
-      autoRotate: DEFAULT_AUTO_ROTATE as boolean,
-      flipX: { type: 'action', label: 'Flip X' },
-      flipY: { type: 'action', label: 'Flip Y' },
-      flipZ: { type: 'action', label: 'Flip Z' },
-      resetFlip: { type: 'action', label: 'Reset flip' },
-      saveDefaults: { type: 'action', label: 'Save as defaults' },
-    },
-    { onAction: runAction },
-  )
-
-  const renderer = viewer.values.renderer as RendererChoice
-  const focalPx = sharp.values.focal
+  const renderer = controls.values.viewer.renderer as RendererChoice
+  const focalPx = controls.values.focal
 
   useEffect(() => {
     const worker = new SharpWorkerClient((message) => {
@@ -275,7 +274,7 @@ function App() {
         if (previous) URL.revokeObjectURL(previous.previewUrl)
         return { file, previewUrl: previewUrl as string, width: info.width, height: info.height, focalEstimate }
       })
-      sharp.setValue('focal', focalEstimate.focalPx)
+      controls.setValue('focal', focalEstimate.focalPx)
       setStatusText('Image ready. Configure settings and generate the splat.')
       setResult((previous) => {
         if (previous) {
@@ -326,8 +325,8 @@ function App() {
         imageHeight: height,
         focalPx,
         disparityFactor: focalPx / width,
-        opacityThreshold: sharp.values.opacity,
-        maxGaussians: sharp.values.maxGaussians,
+        opacityThreshold: controls.values.opacity,
+        maxGaussians: controls.values.maxGaussians,
       })
 
       const bytes = new Uint8Array(inference.plyBuffer as ArrayBuffer)
@@ -336,11 +335,13 @@ function App() {
       const elapsedMs = performance.now() - startTime
       const meta = readSharpViewerMeta(bytes)
 
-      viewer.setValues({
-        bg: meta?.bgColor ?? DEFAULT_BG_COLOR,
-        fov: meta?.fov ?? DEFAULT_FOV,
-        maxScreenSize: meta?.maxScreenSize ?? DEFAULT_MAX_SCREEN_SIZE,
-        autoRotate: meta?.autoRotate ?? DEFAULT_AUTO_ROTATE,
+      controls.setValues({
+        viewer: {
+          bg: meta?.bgColor ?? DEFAULT_BG_COLOR,
+          fov: meta?.fov ?? DEFAULT_FOV,
+          maxScreenSize: meta?.maxScreenSize ?? DEFAULT_MAX_SCREEN_SIZE,
+          autoRotate: meta?.autoRotate ?? DEFAULT_AUTO_ROTATE,
+        },
       })
 
       startTransition(() => {
@@ -386,10 +387,10 @@ function App() {
     const camera = cameraSnapshotRef.current
     const meta: SharpViewerMeta = {
       ...(camera ? { cameraPosition: camera.position, cameraTarget: camera.target, cameraUp: camera.up } : {}),
-      bgColor: viewer.values.bg,
-      fov: viewer.values.fov,
-      autoRotate: viewer.values.autoRotate,
-      maxScreenSize: viewer.values.maxScreenSize,
+      bgColor: controls.values.viewer.bg,
+      fov: controls.values.viewer.fov,
+      autoRotate: controls.values.viewer.autoRotate,
+      maxScreenSize: controls.values.viewer.maxScreenSize,
       ...(splatPosition.some((n) => n !== 0) ? { splatPosition } : {}),
       ...(splatRotation.some((n) => n !== 0) ? { splatRotation } : {}),
       ...(splatFlip.some(Boolean) ? { splatFlip } : {}),
@@ -453,12 +454,12 @@ function App() {
     generate: () => void runGeneration(),
     download: triggerDownload,
     copyEmbed: () => void copyEmbed(),
-    resetFocal: () => selectedImage && sharp.setValue('focal', selectedImage.focalEstimate.focalPx),
-    flipX: () => setSplatFlip((f) => [!f[0], f[1], f[2]]),
-    flipY: () => setSplatFlip((f) => [f[0], !f[1], f[2]]),
-    flipZ: () => setSplatFlip((f) => [f[0], f[1], !f[2]]),
-    resetFlip: handleResetTransform,
-    saveDefaults: handleSaveDefaults,
+    resetFocal: () => selectedImage && controls.setValue('focal', selectedImage.focalEstimate.focalPx),
+    'viewer.flipX': () => setSplatFlip((f) => [!f[0], f[1], f[2]]),
+    'viewer.flipY': () => setSplatFlip((f) => [f[0], !f[1], f[2]]),
+    'viewer.flipZ': () => setSplatFlip((f) => [f[0], f[1], !f[2]]),
+    'viewer.resetFlip': handleResetTransform,
+    'viewer.saveDefaults': handleSaveDefaults,
   }
 
   const resultRatio =
@@ -473,9 +474,9 @@ function App() {
     initialCameraPosition: bakedMeta?.cameraPosition,
     initialCameraTarget: bakedMeta?.cameraTarget,
     initialCameraUp: bakedMeta?.cameraUp,
-    bgColor: viewer.values.bg,
-    fov: viewer.values.fov,
-    autoRotate: viewer.values.autoRotate,
+    bgColor: controls.values.viewer.bg,
+    fov: controls.values.viewer.fov,
+    autoRotate: controls.values.viewer.autoRotate,
     splatPosition,
     splatRotation,
     splatFlip,
@@ -490,7 +491,7 @@ function App() {
       {renderer === 'aholo' ? (
         <AholoSplatPreview {...previewProps} />
       ) : (
-        <SplatPreview {...previewProps} maxScreenSize={viewer.values.maxScreenSize} />
+        <SplatPreview {...previewProps} maxScreenSize={controls.values.viewer.maxScreenSize} />
       )}
 
       <input
